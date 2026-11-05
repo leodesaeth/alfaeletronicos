@@ -1,0 +1,469 @@
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import type { Product, ProductImage, ProductFormData, CatalogFilters } from '@/types'
+import { slugify } from '@/lib/utils'
+import { SHOWCASE_PRODUCTS, SHOWCASE_CATEGORIES } from '@/lib/showcaseData'
+import { optimizeImageFile } from '@/lib/imageOptimizer'
+
+const BUCKET = 'product-images'
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+// Constrói URL pública de imagem do produto
+export function getProductImageUrl(storagePath: string): string {
+  if (storagePath.startsWith('/showcase/') && !storagePath.includes('?')) {
+    return `${storagePath}?v=2`
+  }
+  if (storagePath.startsWith('/') || storagePath.startsWith('http')) return storagePath
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath)
+  return data.publicUrl
+}
+
+function filterShowcaseProducts(filters: Partial<CatalogFilters> = {}): Product[] {
+  let list = [...SHOWCASE_PRODUCTS]
+  if (filters.category_slug) {
+    const cat = SHOWCASE_CATEGORIES.find((c) => c.slug === filters.category_slug)
+    if (cat) list = list.filter((p) => p.category_id === cat.id)
+  }
+  if (filters.search && filters.search.trim()) {
+    const term = filters.search.trim().toLowerCase()
+    list = list.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.short_description || '').toLowerCase().includes(term) ||
+        (p.description || '').toLowerCase().includes(term)
+    )
+  }
+  switch (filters.sort) {
+    case 'name_asc':
+      list.sort((a, b) => a.name.localeCompare(b.name))
+      break
+    case 'name_desc':
+      list.sort((a, b) => b.name.localeCompare(a.name))
+      break
+    case 'price_asc':
+      list.sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
+      break
+    case 'price_desc':
+      list.sort((a, b) => (b.price ?? 0) - (a.price ?? 0))
+      break
+  }
+  return list
+}
+
+// Valida arquivo de imagem
+export function validateImageFile(file: File): string | null {
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return 'Formato inválido. Use JPEG, PNG ou WebP.'
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return 'Arquivo muito grande. O tamanho máximo é 5 MB.'
+  }
+  return null
+}
+
+// ---------------------------------------------------------------
+// QUERIES PÚBLICAS
+// ---------------------------------------------------------------
+
+// Lista produtos publicados com filtros
+export async function getPublishedProducts(
+  filters: Partial<CatalogFilters> = {}
+): Promise<Product[]> {
+  if (!isSupabaseConfigured) return filterShowcaseProducts(filters)
+
+  let query = supabase
+    .from('products')
+    .select(`
+      *,
+      category:categories(*),
+      product_images(*)
+    `)
+    .eq('is_published', true)
+
+  if (filters.category_slug) {
+    // Join via categoria
+    const { data: cat } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('slug', filters.category_slug)
+      .single()
+    if (cat) query = query.eq('category_id', cat.id)
+  }
+
+  if (filters.search && filters.search.trim()) {
+    const term = filters.search.trim()
+    query = query.or(
+      `name.ilike.%${term}%,short_description.ilike.%${term}%,description.ilike.%${term}%`
+    )
+  }
+
+  // Ordenação
+  switch (filters.sort) {
+    case 'name_asc':
+      query = query.order('name', { ascending: true })
+      break
+    case 'name_desc':
+      query = query.order('name', { ascending: false })
+      break
+    case 'price_asc':
+      query = query.order('price', { ascending: true, nullsFirst: false })
+      break
+    case 'price_desc':
+      query = query.order('price', { ascending: false, nullsFirst: false })
+      break
+    default:
+      query = query
+        .order('is_featured', { ascending: false })
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: false })
+  }
+
+  const { data, error } = await query
+  if (error) return filterShowcaseProducts(filters)
+
+  // Enriquecer com URLs públicas
+  return (data || []).map(enrichProductImages)
+}
+
+// Busca produto publicado por slug
+export async function getPublishedProductBySlug(slug: string): Promise<Product | null> {
+  if (!isSupabaseConfigured) {
+    return SHOWCASE_PRODUCTS.find((p) => p.slug === slug) || null
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      category:categories(*),
+      product_images(*)
+    `)
+    .eq('slug', slug)
+    .eq('is_published', true)
+    .single()
+
+  if (error) return SHOWCASE_PRODUCTS.find((p) => p.slug === slug) || null
+  return enrichProductImages(data)
+}
+
+// Busca produtos em destaque
+export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
+  if (!isSupabaseConfigured) return SHOWCASE_PRODUCTS.slice(0, limit)
+
+  const { data, error } = await supabase
+    .from('products')
+    .select(`*, category:categories(*), product_images(*)`)
+    .eq('is_published', true)
+    .eq('is_featured', true)
+    .order('display_order', { ascending: true })
+    .limit(limit)
+
+  if (error) return SHOWCASE_PRODUCTS.slice(0, limit)
+  return (data || []).map(enrichProductImages)
+}
+
+// Busca produtos relacionados (mesma categoria)
+export async function getRelatedProducts(
+  productId: string,
+  categoryId: string,
+  limit = 4
+): Promise<Product[]> {
+  if (!isSupabaseConfigured) {
+    return SHOWCASE_PRODUCTS.filter((p) => p.id !== productId).slice(0, limit)
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .select(`*, category:categories(*), product_images(*)`)
+    .eq('is_published', true)
+    .eq('category_id', categoryId)
+    .neq('id', productId)
+    .order('display_order', { ascending: true })
+    .limit(limit)
+
+  if (error) {
+    return SHOWCASE_PRODUCTS.filter((p) => p.id !== productId).slice(0, limit)
+  }
+  return (data || []).map(enrichProductImages)
+}
+
+// ---------------------------------------------------------------
+// QUERIES ADMIN
+// ---------------------------------------------------------------
+
+// Lista todos os produtos (admin)
+export async function getAllProducts(filters: {
+  search?: string
+  category_id?: string
+  is_published?: boolean | null
+} = {}): Promise<Product[]> {
+  if (!isSupabaseConfigured) {
+    return SHOWCASE_PRODUCTS.filter((p) => {
+      if (filters.search && !p.name.toLowerCase().includes(filters.search.toLowerCase())) return false
+      if (filters.category_id && p.category_id !== filters.category_id) return false
+      if (filters.is_published !== undefined && filters.is_published !== null && p.is_published !== filters.is_published) return false
+      return true
+    })
+  }
+
+  let query = supabase
+    .from('products')
+    .select(`*, category:categories(*), product_images(*)`)
+
+  if (filters.search) {
+    query = query.ilike('name', `%${filters.search}%`)
+  }
+  if (filters.category_id) {
+    query = query.eq('category_id', filters.category_id)
+  }
+  if (filters.is_published !== undefined && filters.is_published !== null) {
+    query = query.eq('is_published', filters.is_published)
+  }
+
+  query = query
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: false })
+
+  const { data, error } = await query
+  if (error) return SHOWCASE_PRODUCTS
+  return (data || []).map(enrichProductImages)
+}
+
+// Busca produto por ID (admin)
+export async function getProductById(id: string): Promise<Product | null> {
+  if (!isSupabaseConfigured) {
+    return SHOWCASE_PRODUCTS.find((p) => p.id === id) || null
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .select(`*, category:categories(*), product_images(*)`)
+    .eq('id', id)
+    .single()
+
+  if (error) return SHOWCASE_PRODUCTS.find((p) => p.id === id) || null
+  return enrichProductImages(data)
+}
+
+// Cria produto
+export async function createProduct(formData: ProductFormData): Promise<Product> {
+  const price = formData.price ? parseFloat(formData.price) : null
+
+  const { data, error } = await supabase
+    .from('products')
+    .insert({
+      name: formData.name,
+      slug: formData.slug || slugify(formData.name),
+      category_id: formData.category_id || null,
+      short_description: formData.short_description || null,
+      description: formData.description || null,
+      price,
+      show_price: formData.show_price,
+      availability: formData.availability,
+      is_published: formData.is_published,
+      is_featured: formData.is_featured,
+      display_order: formData.display_order || 0,
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// Atualiza produto
+export async function updateProduct(
+  id: string,
+  formData: Partial<ProductFormData>
+): Promise<Product> {
+  const updates: Record<string, unknown> = { ...formData }
+  if (formData.price !== undefined) {
+    updates.price = formData.price ? parseFloat(formData.price) : null
+  }
+  if (formData.name && !formData.slug) {
+    updates.slug = slugify(formData.name)
+  }
+  if ('category_id' in updates && !updates.category_id) {
+    updates.category_id = null
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// Alterna publicação
+export async function toggleProductPublished(
+  id: string,
+  isPublished: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('products')
+    .update({ is_published: isPublished })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// Exclui produto (e imagens do storage)
+export async function deleteProduct(id: string): Promise<void> {
+  // Busca caminhos das imagens para deletar do storage
+  const { data: images } = await supabase
+    .from('product_images')
+    .select('storage_path')
+    .eq('product_id', id)
+
+  if (images && images.length > 0) {
+    const paths = images.map((img) => img.storage_path)
+    await supabase.storage.from(BUCKET).remove(paths)
+  }
+
+  const { error } = await supabase.from('products').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+// Duplica produto
+export async function duplicateProduct(id: string): Promise<Product> {
+  const original = await getProductById(id)
+  if (!original) throw new Error('Produto não encontrado.')
+
+  const newSlug = `${original.slug}-copia-${Date.now()}`
+  const { data, error } = await supabase
+    .from('products')
+    .insert({
+      name: `${original.name} (cópia)`,
+      slug: newSlug,
+      category_id: original.category_id,
+      short_description: original.short_description,
+      description: original.description,
+      price: original.price,
+      show_price: original.show_price,
+      availability: original.availability,
+      is_published: false, // Sempre começa oculto
+      is_featured: false,
+      display_order: original.display_order,
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+// ---------------------------------------------------------------
+// GERENCIAMENTO DE IMAGENS
+// ---------------------------------------------------------------
+
+// Faz upload de imagem (com otimização WebP automática) e registra no banco
+export async function uploadProductImage(
+  file: File,
+  productId: string,
+  displayOrder: number,
+  isPrimary: boolean
+): Promise<ProductImage> {
+  const validationError = validateImageFile(file)
+  if (validationError) throw new Error(validationError)
+
+  const optimizedFile = await optimizeImageFile(file, 1200, 0.86)
+  const ext = optimizedFile.name.split('.').pop()?.toLowerCase() || 'webp'
+  const path = `products/${productId}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, optimizedFile, { upsert: false, contentType: optimizedFile.type })
+
+  if (uploadError) throw new Error(`Upload falhou: ${uploadError.message}`)
+
+  // Se é primária, desmarca as demais
+  if (isPrimary) {
+    await supabase
+      .from('product_images')
+      .update({ is_primary: false })
+      .eq('product_id', productId)
+  }
+
+  const { data, error: dbError } = await supabase
+    .from('product_images')
+    .insert({
+      product_id: productId,
+      storage_path: path,
+      display_order: displayOrder,
+      is_primary: isPrimary,
+    })
+    .select()
+    .single()
+
+  if (dbError) {
+    // Rollback: remove do storage se falhou no banco
+    await supabase.storage.from(BUCKET).remove([path])
+    throw new Error(dbError.message)
+  }
+
+  return { ...data, public_url: getProductImageUrl(path) }
+}
+
+// Define imagem principal
+export async function setPrimaryImage(
+  imageId: string,
+  productId: string
+): Promise<void> {
+  // Remove flag de primária das demais
+  await supabase
+    .from('product_images')
+    .update({ is_primary: false })
+    .eq('product_id', productId)
+
+  // Define a nova primária
+  const { error } = await supabase
+    .from('product_images')
+    .update({ is_primary: true })
+    .eq('id', imageId)
+
+  if (error) throw new Error(error.message)
+}
+
+// Remove imagem
+export async function deleteProductImage(
+  imageId: string,
+  storagePath: string
+): Promise<void> {
+  await supabase.storage.from(BUCKET).remove([storagePath])
+  const { error } = await supabase
+    .from('product_images')
+    .delete()
+    .eq('id', imageId)
+  if (error) throw new Error(error.message)
+}
+
+// Reordena imagens
+export async function reorderProductImages(
+  imageUpdates: Array<{ id: string; display_order: number }>
+): Promise<void> {
+  for (const update of imageUpdates) {
+    await supabase
+      .from('product_images')
+      .update({ display_order: update.display_order })
+      .eq('id', update.id)
+  }
+}
+
+// ---------------------------------------------------------------
+// HELPERS INTERNOS
+// ---------------------------------------------------------------
+
+// Adiciona URLs públicas às imagens de um produto
+function enrichProductImages(product: Product): Product {
+  if (!product.product_images) return product
+  const enriched = product.product_images
+    .sort((a, b) => a.display_order - b.display_order)
+    .map((img) => ({
+      ...img,
+      public_url: getProductImageUrl(img.storage_path),
+    }))
+  return { ...product, product_images: enriched }
+}
