@@ -14,6 +14,8 @@ import { LoginPage } from '@/pages/admin/LoginPage'
 import { DashboardPage } from '@/pages/admin/DashboardPage'
 import { ProductsPage } from '@/pages/admin/ProductsPage'
 import { ProductFormPage } from '@/pages/admin/ProductFormPage'
+import { InventoryPage } from '@/pages/admin/InventoryPage'
+import { FinancialPage } from '@/pages/admin/FinancialPage'
 import { CategoriesPage } from '@/pages/admin/CategoriesPage'
 import { StoreSettingsPage } from '@/pages/admin/StoreSettingsPage'
 
@@ -60,6 +62,22 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProductFormPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/estoque"
+              element={
+                <ProtectedRoute>
+                  <InventoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/financeiro"
+              element={
+                <ProtectedRoute>
+                  <FinancialPage />
                 </ProtectedRoute>
               }
             />

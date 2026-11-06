@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, X, Star, StarOff, AlertCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Upload, X, Star, StarOff, AlertCircle, Loader2, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import {
   getProductById,
@@ -13,6 +13,11 @@ import {
   validateImageFile,
 } from '@/services/products'
 import { getAllCategories } from '@/services/categories'
+import {
+  generateSmartProductCopy,
+  getAllProductMeta,
+  updateProductMeta,
+} from '@/services/catalogIntelligence'
 import { slugify, formatBytes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { Category, ProductImage, Availability } from '@/types'
@@ -81,11 +86,25 @@ export function ProductFormPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [productId, setProductId] = useState<string | null>(id || null)
 
+  // Metadados extras (Estoque, Custo, Promoção e Variações)
+  const [stockQuantity, setStockQuantity] = useState<string>('')
+  const [lowStockThreshold, setLowStockThreshold] = useState<string>('2')
+  const [variationsText, setVariationsText] = useState<string>('')
+  const [costPrice, setCostPrice] = useState<string>('')
+  const [compareAtPrice, setCompareAtPrice] = useState<string>('')
+  const [desiredMargin, setDesiredMargin] = useState<string>('35')
+  const [supplier, setSupplier] = useState<string>('')
+
   useEffect(() => {
     getAllCategories().then(setCategories)
+    const params = new URLSearchParams(window.location.search)
+    const preselectedCat = params.get('categoria')
+    if (!id && preselectedCat) {
+      setForm((prev) => ({ ...prev, category_id: preselectedCat, is_published: true }))
+    }
 
     if (id) {
-      getProductById(id).then((data) => {
+      Promise.all([getProductById(id), getAllProductMeta()]).then(([data, metaMap]) => {
         if (!data) {
           toast.error('Produto não encontrado.')
           navigate('/admin/produtos')
@@ -104,6 +123,27 @@ export function ProductFormPage() {
           is_featured: data.is_featured,
           display_order: data.display_order,
         })
+        const meta = metaMap[id]
+        if (meta) {
+          if (meta.stock_quantity !== undefined && meta.stock_quantity !== null) {
+            setStockQuantity(String(meta.stock_quantity))
+          }
+          if (meta.low_stock_threshold !== undefined) {
+            setLowStockThreshold(String(meta.low_stock_threshold))
+          }
+          if (meta.variations && meta.variations.length > 0) {
+            setVariationsText(meta.variations.join(', '))
+          }
+          if (meta.cost_price !== undefined && meta.cost_price !== null) {
+            setCostPrice(String(meta.cost_price))
+          }
+          if (meta.compare_at_price !== undefined && meta.compare_at_price !== null) {
+            setCompareAtPrice(String(meta.compare_at_price))
+          }
+          if (meta.supplier) {
+            setSupplier(meta.supplier)
+          }
+        }
         // Carregar imagens existentes
         const existingImages: ImageItem[] = (data.product_images || [])
           .sort((a, b) => a.display_order - b.display_order)
@@ -275,8 +315,16 @@ export function ProductFormPage() {
     setSaving(true)
 
     try {
+      const parsedStock =
+        stockQuantity.trim() !== '' ? Math.max(0, parseInt(stockQuantity, 10)) : null
+      const autoAvailability: Availability =
+        parsedStock === 0 && form.availability === 'available'
+          ? 'unavailable'
+          : form.availability
+
       const formData = {
         ...form,
+        availability: autoAvailability,
         is_published: publish !== undefined ? publish : form.is_published,
       }
 
@@ -288,6 +336,31 @@ export function ProductFormPage() {
         savedProduct = await createProduct(formData)
         setProductId(savedProduct.id)
         toast.success('Produto criado! Agora você pode adicionar imagens.')
+      }
+
+      // Salvar metadados de estoque, custo, preço promocional e variações
+      if (savedProduct?.id) {
+        const variations = variationsText
+          .split(',')
+          .map((v) => v.trim())
+          .filter(Boolean)
+        const parsedCost =
+          costPrice.trim() !== ''
+            ? parseFloat(costPrice.replace(',', '.'))
+            : null
+        const parsedCompare =
+          compareAtPrice.trim() !== ''
+            ? parseFloat(compareAtPrice.replace(',', '.'))
+            : null
+
+        await updateProductMeta(savedProduct.id, {
+          stock_quantity: parsedStock,
+          low_stock_threshold: parseInt(lowStockThreshold, 10) || 2,
+          cost_price: parsedCost && !isNaN(parsedCost) ? parsedCost : null,
+          compare_at_price: parsedCompare && !isNaN(parsedCompare) ? parsedCompare : null,
+          supplier: supplier.trim() || undefined,
+          variations,
+        })
       }
 
       // Upload de imagens pendentes (para novos produtos)
@@ -337,7 +410,7 @@ export function ProductFormPage() {
 
   return (
     <AdminLayout>
-      <div className="max-w-3xl">
+      <div className="max-w-3xl mx-auto w-full">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 mb-6">
           <Link
@@ -376,6 +449,31 @@ export function ProductFormPage() {
               placeholder="Selecione uma categoria..."
               error={errors.category_id}
             />
+
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs text-muted">
+                Dica: digite o nome do produto acima e gere a descrição comercial em 1 clique.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!form.name.trim()) {
+                    toast.error('Digite o nome do produto primeiro.')
+                    return
+                  }
+                  const catName =
+                    categories.find((c) => c.id === form.category_id)?.name || ''
+                  const copy = generateSmartProductCopy(form.name, catName)
+                  update('short_description', copy.shortDescription)
+                  update('description', copy.fullDescription)
+                  toast.success('Descrição comercial gerada!')
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold bg-[#111111] text-white hover:bg-[#242424] px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Sparkles size={13} />
+                Gerar descrição inteligente
+              </button>
+            </div>
 
             <Textarea
               label="Descrição curta"
@@ -566,41 +664,191 @@ export function ProductFormPage() {
             )}
           </section>
 
-          {/* SEÇÃO C: Preço */}
+          {/* SEÇÃO C: Preço, Custo e Calculadora de Lucro */}
           <section className="bg-white rounded-2xl shadow-card p-5 sm:p-6 flex flex-col gap-4">
-            <h2 className="font-semibold text-graphite">C — Preço</h2>
+            <h2 className="font-semibold text-graphite">
+              C — Preço, Custo & Calculadora de Lucro
+            </h2>
 
-            <div className="grid sm:grid-cols-2 gap-4 items-end">
+            {/* Linha 1: Custo + Calculadora de Margem */}
+            <div className="grid sm:grid-cols-3 gap-4 items-end bg-[#FAFAF8] p-4 rounded-xl border border-[#EAEAEA]">
               <Input
-                label="Preço (R$)"
+                label="Preço de Custo (R$ - Invisível ao cliente)"
+                type="number"
+                min="0"
+                step="0.01"
+                value={costPrice}
+                onChange={(e) => setCostPrice(e.target.value)}
+                placeholder="Ex: 200,00"
+              />
+              <Input
+                label="Margem desejada (%)"
+                type="number"
+                min="1"
+                max="90"
+                value={desiredMargin}
+                onChange={(e) => setDesiredMargin(e.target.value)}
+                placeholder="35"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const c = parseFloat(costPrice.replace(',', '.'))
+                  const m = parseFloat(desiredMargin.replace(',', '.'))
+                  if (isNaN(c) || c <= 0) {
+                    toast.error('Digite o Preço de Custo primeiro.')
+                    return
+                  }
+                  const targetMargin = isNaN(m) || m <= 0 || m >= 95 ? 35 : m
+                  const suggested = Math.round((c / (1 - targetMargin / 100)) * 100) / 100
+                  update('price', String(suggested))
+                  toast.success(`Preço sugerido calculado para ${targetMargin}% de margem!`)
+                }}
+              >
+                Calcular Preço Ideal
+              </Button>
+            </div>
+
+            {/* Linha 2: Preço De (Promoção) e Preço Por (Venda) */}
+            <div className="grid sm:grid-cols-2 gap-4 items-start">
+              <Input
+                label='Preço Antigo "De R$" (Opcional p/ Promoção)'
+                type="number"
+                min="0"
+                step="0.01"
+                value={compareAtPrice}
+                onChange={(e) => setCompareAtPrice(e.target.value)}
+                placeholder="Ex: 349,00"
+                hint="Se maior que o preço atual, exibe o valor riscado e o selo % OFF."
+              />
+              <Input
+                label='Preço de Venda Atual "Por R$"'
                 type="number"
                 min="0"
                 step="0.01"
                 value={form.price}
                 onChange={(e) => update('price', e.target.value)}
                 placeholder="0,00"
-                hint="Deixe em branco para não exibir preço."
+                hint="Valor principal exibido na vitrine."
                 error={errors.price}
               />
-              <Toggle
-                label="Exibir preço no catálogo"
-                description="Se desativado, o preço ficará oculto para visitantes"
-                checked={form.show_price}
-                onChange={(v) => update('show_price', v)}
-                id="show_price"
-              />
             </div>
+
+            {/* Simulador em tempo real de Lucro PIX vs Cartão */}
+            {(() => {
+              const pVal = parseFloat(form.price)
+              const cVal = parseFloat(costPrice)
+              const compVal = parseFloat(compareAtPrice)
+              if (isNaN(pVal) || pVal <= 0) return null
+
+              const hasCost = !isNaN(cVal) && cVal > 0
+              const pixProfit = hasCost ? pVal - cVal : 0
+              const marginPct = hasCost ? (pixProfit / pVal) * 100 : 0
+              const cardFee = pVal * 0.045 // ~4,5% taxa média maquininha
+              const cardProfit = hasCost ? pVal - cVal - cardFee : 0
+              const discountPct =
+                !isNaN(compVal) && compVal > pVal
+                  ? Math.round(((compVal - pVal) / compVal) * 100)
+                  : 0
+
+              return (
+                <div className="grid sm:grid-cols-3 gap-3 bg-[#F7F7F7] rounded-xl p-3.5 text-xs">
+                  <div>
+                    <span className="text-[#767676] block">Lucro no PIX / Dinheiro:</span>
+                    <strong
+                      className={cn(
+                        'text-sm',
+                        pixProfit >= 0 ? 'text-[#166534]' : 'text-red-600'
+                      )}
+                    >
+                      {hasCost
+                        ? `R$ ${pixProfit.toFixed(2)} (${marginPct.toFixed(0)}%)`
+                        : 'Informe o custo acima'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[#767676] block">
+                      Lucro no Cartão (~4,5% taxa):
+                    </span>
+                    <strong
+                      className={cn(
+                        'text-sm',
+                        cardProfit >= 0 ? 'text-[#111111]' : 'text-red-600'
+                      )}
+                    >
+                      {hasCost ? `R$ ${cardProfit.toFixed(2)}` : '—'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[#767676] block">Destaque Promocional:</span>
+                    <strong className="text-sm text-[#111111]">
+                      {discountPct > 0
+                        ? `Selo -${discountPct}% OFF ativo!`
+                        : 'Sem desconto "De/Por"'}
+                    </strong>
+                  </div>
+                </div>
+              )
+            })()}
+
+            <Toggle
+              label="Exibir preço no catálogo"
+              description="Se desativado, o preço ficará oculto para visitantes (Consulte o preço)"
+              checked={form.show_price}
+              onChange={(v) => update('show_price', v)}
+              id="show_price"
+            />
           </section>
 
-          {/* SEÇÃO D: Disponibilidade */}
+          {/* SEÇÃO D: Disponibilidade, Estoque e Variações */}
           <section className="bg-white rounded-2xl shadow-card p-5 sm:p-6 flex flex-col gap-4">
-            <h2 className="font-semibold text-graphite">D — Disponibilidade</h2>
-            <Select
-              label="Status de disponibilidade"
-              value={form.availability}
-              onChange={(e) => update('availability', e.target.value as Availability)}
-              options={AVAILABILITY_OPTIONS}
-            />
+            <h2 className="font-semibold text-graphite">
+              D — Disponibilidade, Estoque e Variações
+            </h2>
+            <div className="grid sm:grid-cols-3 gap-4">
+              <Select
+                label="Status de disponibilidade"
+                value={form.availability}
+                onChange={(e) => update('availability', e.target.value as Availability)}
+                options={AVAILABILITY_OPTIONS}
+              />
+              <Input
+                label="Qtd. em Estoque (Opcional)"
+                type="number"
+                min="0"
+                value={stockQuantity}
+                onChange={(e) => setStockQuantity(e.target.value)}
+                placeholder="Ex: 10"
+                hint="Se chegar a 0, muda para Indisponível."
+              />
+              <Input
+                label="Alerta de estoque mínimo"
+                type="number"
+                min="1"
+                value={lowStockThreshold}
+                onChange={(e) => setLowStockThreshold(e.target.value)}
+                placeholder="2"
+                hint="Avisa no painel quando atingir."
+              />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input
+                label="Variações disponíveis (Cores, Capacidades ou Tamanhos)"
+                value={variationsText}
+                onChange={(e) => setVariationsText(e.target.value)}
+                placeholder="Ex: Preto, Branco, Titânio Natural, 256GB"
+                hint="Separe por vírgula."
+              />
+              <Input
+                label="Fornecedor Principal (Opcional - Interno)"
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
+                placeholder="Ex: Importadora Oficial SP"
+                hint="Visível apenas no controle de estoque."
+              />
+            </div>
           </section>
 
           {/* SEÇÃO E: Publicação */}

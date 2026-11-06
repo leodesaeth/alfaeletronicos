@@ -15,6 +15,10 @@ import {
   Star,
   CheckSquare,
   Square,
+  MessageCircle,
+  Percent,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import {
@@ -24,8 +28,13 @@ import {
   duplicateProduct,
   updateProduct,
   createProduct,
+  batchUpdatePrices,
 } from '@/services/products'
 import { getAllCategories } from '@/services/categories'
+import {
+  getAllProductMeta,
+  type ProductMetaMap,
+} from '@/services/catalogIntelligence'
 import type { Product, Category, Availability } from '@/types'
 import { AVAILABILITY_LABELS } from '@/types'
 import { formatBRL, slugify } from '@/lib/utils'
@@ -42,6 +51,7 @@ export function ProductsPage() {
 
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [metaMap, setMetaMap] = useState<ProductMetaMap>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
@@ -57,6 +67,12 @@ export function ProductsPage() {
   const [priceDraft, setPriceDraft] = useState<string>('')
   const [importingCsv, setImportingCsv] = useState(false)
 
+  // Modal de Reajuste em Massa
+  const [showBatchPriceModal, setShowBatchPriceModal] = useState(false)
+  const [batchPriceType, setBatchPriceType] = useState<'percentage' | 'fixed'>('percentage')
+  const [batchPriceValue, setBatchPriceValue] = useState('')
+  const [batchPriceLoading, setBatchPriceLoading] = useState(false)
+
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -64,9 +80,14 @@ export function ProductsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [prods, cats] = await Promise.all([getAllProducts(), getAllCategories()])
+      const [prods, cats, metas] = await Promise.all([
+        getAllProducts(),
+        getAllCategories(),
+        getAllProductMeta(),
+      ])
       setProducts(prods)
       setCategories(cats)
+      setMetaMap(metas)
     } catch {
       toast.error('Erro ao carregar produtos.')
     } finally {
@@ -150,6 +171,36 @@ export function ProductsPage() {
     }
   }
 
+  const handleMoveProductOrder = async (product: Product, direction: 'up' | 'down') => {
+    const idx = filtered.findIndex((p) => p.id === product.id)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (idx < 0 || swapIdx < 0 || swapIdx >= filtered.length) return
+
+    const other = filtered[swapIdx]
+    const currentOrder = product.display_order || idx + 1
+    const otherOrder = other.display_order || swapIdx + 1
+    const nextCurrentOrder = currentOrder === otherOrder ? (direction === 'up' ? otherOrder - 1 : otherOrder + 1) : otherOrder
+    const nextOtherOrder = currentOrder
+
+    try {
+      await Promise.all([
+        updateProduct(product.id, { display_order: nextCurrentOrder }),
+        updateProduct(other.id, { display_order: nextOtherOrder }),
+      ])
+      setProducts((prev) => {
+        const updated = prev.map((p) => {
+          if (p.id === product.id) return { ...p, display_order: nextCurrentOrder }
+          if (p.id === other.id) return { ...p, display_order: nextOtherOrder }
+          return p
+        })
+        return [...updated].sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+      })
+      toast.success('Ordem na vitrine atualizada!')
+    } catch {
+      toast.error('Erro ao reordenar produto.')
+    }
+  }
+
   const handleQuickPriceSave = async (product: Product) => {
     setEditingPriceId(null)
     const clean = priceDraft.replace(',', '.').trim()
@@ -202,10 +253,62 @@ export function ProductsPage() {
   const handleDuplicate = async (product: Product) => {
     try {
       const dup = await duplicateProduct(product.id)
-      toast.success('Produto duplicado. Abrindo editor...')
+      toast.success('Produto duplicado com sucesso! Abrindo editor...')
       navigate(`/admin/produtos/${dup.id}/editar`)
     } catch {
       toast.error('Erro ao duplicar produto.')
+    }
+  }
+
+  // Copia mensagem formatada pronta para vendedores mandarem no WhatsApp
+  const handleCopyWhatsAppOffer = (product: Product) => {
+    const origin = window.location.origin
+    const productUrl = `${origin}/produto/${product.slug}`
+    const priceText =
+      product.show_price && product.price
+        ? `🔥 *${formatBRL(product.price)}*`
+        : '💬 *Consulte condições especiais*'
+
+    const message = [
+      `📱 *${product.name}*`,
+      product.short_description ? `✨ ${product.short_description}` : '',
+      priceText,
+      `✅ Disponível na Alfa Eletrônicos`,
+      `👉 Veja fotos e detalhes: ${productUrl}`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    navigator.clipboard.writeText(message)
+    toast.success('Oferta copiada! Cole no WhatsApp.', { icon: '💬' })
+  }
+
+  // Reajuste em massa de preços
+  const handleApplyBatchPrice = async () => {
+    const val = parseFloat(batchPriceValue.replace(',', '.').trim())
+    if (isNaN(val) || val === 0) {
+      toast.error('Informe um valor de reajuste válido.')
+      return
+    }
+
+    setBatchPriceLoading(true)
+    try {
+      const count = await batchUpdatePrices({
+        productIds: selectedIds.length > 0 ? selectedIds : undefined,
+        categoryId: filterCategory || undefined,
+        type: batchPriceType,
+        value: val,
+      })
+
+      toast.success(`Preço atualizado em ${count} produto(s)!`)
+      setShowBatchPriceModal(false)
+      setBatchPriceValue('')
+      setSelectedIds([])
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao reajustar preços.')
+    } finally {
+      setBatchPriceLoading(false)
     }
   }
 
@@ -304,7 +407,7 @@ export function ProductsPage() {
 
   return (
     <AdminLayout>
-      <div className="flex flex-col gap-5 max-w-6xl">
+      <div className="flex flex-col gap-5 max-w-6xl mx-auto w-full">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -335,6 +438,14 @@ export function ProductsPage() {
               onClick={handleExportCsv}
             >
               Exportar CSV
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<Percent size={15} />}
+              onClick={() => setShowBatchPriceModal(true)}
+              title="Ajustar preços em massa de produtos selecionados ou categorias"
+            >
+              Reajustar Preços
             </Button>
             <Link to="/admin/produtos/novo">
               <Button icon={<Plus size={16} />}>Novo produto</Button>
@@ -404,6 +515,13 @@ export function ProductsPage() {
               {selectedIds.length} produto(s) selecionado(s)
             </span>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowBatchPriceModal(true)}
+                className="text-xs font-semibold bg-[#24A850] hover:bg-[#1E8E42] text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <Percent size={13} />
+                Reajustar Preços
+              </button>
               <button
                 onClick={() => handleBulkPublish(true)}
                 className="text-xs font-semibold bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg transition-colors"
@@ -511,21 +629,48 @@ export function ProductsPage() {
                               >
                                 {product.name}
                               </Link>
-                              <button
-                                onClick={() => handleToggleFeatured(product)}
-                                className={cn(
-                                  'inline-flex items-center gap-1 text-[11px] font-medium mt-0.5 transition-colors',
-                                  product.is_featured
-                                    ? 'text-amber-600'
-                                    : 'text-[#AAAAAA] hover:text-[#555555]'
+                              <div className="flex items-center gap-2.5 flex-wrap mt-0.5">
+                                <button
+                                  onClick={() => handleToggleFeatured(product)}
+                                  className={cn(
+                                    'inline-flex items-center gap-1 text-[11px] font-medium transition-colors',
+                                    product.is_featured
+                                      ? 'text-amber-600'
+                                      : 'text-[#AAAAAA] hover:text-[#555555]'
+                                  )}
+                                >
+                                  <Star
+                                    size={11}
+                                    fill={product.is_featured ? 'currentColor' : 'none'}
+                                  />
+                                  {product.is_featured ? 'Em destaque' : 'Destacar'}
+                                </button>
+
+                                {metaMap[product.id]?.stock_quantity !== undefined &&
+                                  metaMap[product.id]?.stock_quantity !== null && (
+                                    <span
+                                      className={cn(
+                                        'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                                        (metaMap[product.id]?.stock_quantity ?? 0) <=
+                                          (metaMap[product.id]?.low_stock_threshold ?? 2)
+                                          ? 'bg-red-50 text-red-700'
+                                          : 'bg-gray-100 text-gray-600'
+                                      )}
+                                    >
+                                      Est: {metaMap[product.id]?.stock_quantity}
+                                    </span>
+                                  )}
+
+                                {(metaMap[product.id]?.whatsapp_clicks || 0) > 0 && (
+                                  <span
+                                    title="Cliques no botão de WhatsApp"
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#24A850] bg-[#24A850]/10 px-1.5 py-0.5 rounded"
+                                  >
+                                    <MessageCircle size={10} />
+                                    {metaMap[product.id]?.whatsapp_clicks}
+                                  </span>
                                 )}
-                              >
-                                <Star
-                                  size={11}
-                                  fill={product.is_featured ? 'currentColor' : 'none'}
-                                />
-                                {product.is_featured ? 'Em destaque' : 'Destacar'}
-                              </button>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -598,6 +743,23 @@ export function ProductsPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
+                              type="button"
+                              onClick={() => handleMoveProductOrder(product, 'up')}
+                              title="Subir posição na vitrine"
+                              className="p-1.5 rounded-lg hover:bg-surface text-muted hover:text-[#111111] transition-colors"
+                            >
+                              <ArrowUp size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveProductOrder(product, 'down')}
+                              title="Descer posição na vitrine"
+                              className="p-1.5 rounded-lg hover:bg-surface text-muted hover:text-[#111111] transition-colors"
+                            >
+                              <ArrowDown size={15} />
+                            </button>
+
+                            <button
                               onClick={() => handleToggle(product)}
                               disabled={togglingId === product.id}
                               title={product.is_published ? 'Ocultar' : 'Publicar'}
@@ -627,8 +789,16 @@ export function ProductsPage() {
                             )}
 
                             <button
+                              onClick={() => handleCopyWhatsAppOffer(product)}
+                              title="Copiar oferta formatada para o WhatsApp"
+                              className="p-1.5 rounded-lg hover:bg-[#24A850]/10 text-muted hover:text-[#24A850] transition-colors"
+                            >
+                              <MessageCircle size={16} />
+                            </button>
+
+                            <button
                               onClick={() => handleDuplicate(product)}
-                              title="Duplicar"
+                              title="Duplicar produto"
                               className="p-1.5 rounded-lg hover:bg-surface text-muted hover:text-graphite transition-colors"
                             >
                               <Copy size={16} />
@@ -661,6 +831,99 @@ export function ProductsPage() {
         title="Excluir produto"
         description={`Tem certeza que deseja excluir "${deleteTarget?.name}"? Esta ação não pode ser desfeita.`}
       />
+
+      {/* Modal de Reajuste de Preços em Massa */}
+      {showBatchPriceModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-[#111111]">
+                Reajustar Preços em Massa
+              </h3>
+              <p className="text-xs text-[#767676] mt-1">
+                {selectedIds.length > 0
+                  ? `Aplicar reajuste em ${selectedIds.length} produto(s) selecionado(s).`
+                  : filterCategory
+                  ? `Aplicar reajuste a todos os produtos da categoria selecionada.`
+                  : `Aplicar reajuste a TODOS os produtos do catálogo.`}
+              </p>
+            </div>
+
+            {/* Tipo de Reajuste */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-[#F5F5F5] rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setBatchPriceType('percentage')}
+                className={cn(
+                  'py-2 rounded-lg transition-colors',
+                  batchPriceType === 'percentage'
+                    ? 'bg-white text-[#111111] shadow-sm'
+                    : 'text-[#767676] hover:text-[#111111]'
+                )}
+              >
+                Porcentagem (%)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchPriceType('fixed')}
+                className={cn(
+                  'py-2 rounded-lg transition-colors',
+                  batchPriceType === 'fixed'
+                    ? 'bg-white text-[#111111] shadow-sm'
+                    : 'text-[#767676] hover:text-[#111111]'
+                )}
+              >
+                Valor Fixo (R$)
+              </button>
+            </div>
+
+            {/* Campo de valor */}
+            <div>
+              <label className="text-xs font-semibold text-[#111111] block mb-1.5">
+                {batchPriceType === 'percentage'
+                  ? 'Variação percentual (+ para aumento, - para desconto)'
+                  : 'Variação em Reais (+ para aumento, - para desconto)'}
+              </label>
+              <div className="flex items-center border border-gray-300 rounded-xl px-3 py-2.5 focus-within:border-[#111111] transition-all">
+                <span className="text-sm font-bold text-[#767676] mr-2">
+                  {batchPriceType === 'percentage' ? '%' : 'R$'}
+                </span>
+                <input
+                  type="text"
+                  autoFocus
+                  value={batchPriceValue}
+                  onChange={(e) => setBatchPriceValue(e.target.value)}
+                  placeholder={batchPriceType === 'percentage' ? 'Ex: 10 ou -5' : 'Ex: 50 ou -20'}
+                  className="flex-1 text-sm font-semibold text-[#111111] outline-none"
+                />
+              </div>
+              <p className="text-[11px] text-[#767676] mt-1.5">
+                Exemplos: digite <strong>10</strong> para aumentar 10%, ou <strong>-15</strong> para dar 15% de desconto.
+              </p>
+            </div>
+
+            {/* Ações */}
+            <div className="flex justify-end gap-2.5 mt-2">
+              <Button
+                variant="ghost"
+                disabled={batchPriceLoading}
+                onClick={() => {
+                  setShowBatchPriceModal(false)
+                  setBatchPriceValue('')
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                loading={batchPriceLoading}
+                onClick={handleApplyBatchPrice}
+              >
+                Aplicar Reajuste
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

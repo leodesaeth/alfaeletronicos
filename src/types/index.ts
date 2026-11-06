@@ -54,6 +54,8 @@ export interface StoreSettings {
   store_description: string | null
   logo_path: string | null
   whatsapp_number: string | null
+  whatsapp_message_template?: string | null
+  hero_image_url?: string | null
   primary_color: string
   hero_title: string | null
   hero_description: string | null
@@ -91,6 +93,8 @@ export interface StoreSettingsFormData {
   store_name: string
   store_description: string
   whatsapp_number: string
+  whatsapp_message_template?: string
+  hero_image_url?: string
   primary_color: string
   hero_title: string
   hero_description: string

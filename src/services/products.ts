@@ -327,34 +327,6 @@ export async function deleteProduct(id: string): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-// Duplica produto
-export async function duplicateProduct(id: string): Promise<Product> {
-  const original = await getProductById(id)
-  if (!original) throw new Error('Produto não encontrado.')
-
-  const newSlug = `${original.slug}-copia-${Date.now()}`
-  const { data, error } = await supabase
-    .from('products')
-    .insert({
-      name: `${original.name} (cópia)`,
-      slug: newSlug,
-      category_id: original.category_id,
-      short_description: original.short_description,
-      description: original.description,
-      price: original.price,
-      show_price: original.show_price,
-      availability: original.availability,
-      is_published: false, // Sempre começa oculto
-      is_featured: false,
-      display_order: original.display_order,
-    })
-    .select()
-    .single()
-
-  if (error) throw new Error(error.message)
-  return data
-}
-
 // ---------------------------------------------------------------
 // GERENCIAMENTO DE IMAGENS
 // ---------------------------------------------------------------
@@ -450,6 +422,97 @@ export async function reorderProductImages(
       .update({ display_order: update.display_order })
       .eq('id', update.id)
   }
+}
+
+// Clona / duplica um produto existente com suas imagens
+export async function duplicateProduct(productId: string): Promise<Product> {
+  const original = await getProductById(productId)
+  if (!original) throw new Error('Produto original não encontrado.')
+
+  const timestamp = Date.now().toString().slice(-4)
+  const baseName = original.name
+  const newName = `${baseName} (Cópia)`
+  const newSlug = slugify(`${baseName}-copia-${timestamp}`)
+
+  const { data: newProd, error: prodErr } = await supabase
+    .from('products')
+    .insert({
+      name: newName,
+      slug: newSlug,
+      category_id: original.category_id,
+      short_description: original.short_description,
+      description: original.description,
+      price: original.price,
+      show_price: original.show_price,
+      availability: original.availability,
+      is_published: false, // Inicia como rascunho por segurança
+      is_featured: false,
+      display_order: (original.display_order || 0) + 1,
+    })
+    .select(`*, category:categories(*), product_images(*)`)
+    .single()
+
+  if (prodErr || !newProd) throw new Error(prodErr?.message || 'Erro ao duplicar produto.')
+
+  // Duplica referências de imagens se existirem
+  if (original.product_images && original.product_images.length > 0) {
+    const imagesToInsert = original.product_images.map((img) => ({
+      product_id: newProd.id,
+      storage_path: img.storage_path,
+      display_order: img.display_order,
+      is_primary: img.is_primary,
+    }))
+
+    await supabase.from('product_images').insert(imagesToInsert)
+  }
+
+  const enriched = await getProductById(newProd.id)
+  return enriched || enrichProductImages(newProd)
+}
+
+// Reajuste de preços em lote (percentual ou fixo em R$)
+export async function batchUpdatePrices(params: {
+  productIds?: string[]
+  categoryId?: string
+  type: 'percentage' | 'fixed'
+  value: number // ex: +10 para +10%, -5 para -5%, +50 para +R$ 50
+}): Promise<number> {
+  let query = supabase.from('products').select('id, price')
+  if (params.productIds && params.productIds.length > 0) {
+    query = query.in('id', params.productIds)
+  } else if (params.categoryId) {
+    query = query.eq('category_id', params.categoryId)
+  } else {
+    // Se nenhum filtro for passado, atualiza todos os produtos
+  }
+
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) return 0
+
+  let updatedCount = 0
+  for (const item of data) {
+    const currentPrice = item.price ?? 0
+    let newPrice = currentPrice
+
+    if (params.type === 'percentage') {
+      newPrice = currentPrice * (1 + params.value / 100)
+    } else {
+      newPrice = currentPrice + params.value
+    }
+
+    if (newPrice < 0) newPrice = 0
+    newPrice = Math.round(newPrice * 100) / 100
+
+    const { error: updErr } = await supabase
+      .from('products')
+      .update({ price: newPrice, updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+
+    if (!updErr) updatedCount++
+  }
+
+  return updatedCount
 }
 
 // ---------------------------------------------------------------

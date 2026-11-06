@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X, Package, SlidersHorizontal } from 'lucide-react'
+import { Search, X, Package, SlidersHorizontal, Check, MessageCircle } from 'lucide-react'
 import { getPublishedProducts } from '@/services/products'
 import { getActiveCategories } from '@/services/categories'
 import type { Product, Category, CatalogFilters } from '@/types'
@@ -8,28 +8,31 @@ import { ProductCard, ProductCardSkeleton } from '@/components/catalog/ProductCa
 import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 import { EmptyState } from '@/components/ui/StateComponents'
-import { cn } from '@/lib/utils'
+import { cn, normalizeWhatsAppNumber } from '@/lib/utils'
+import { useStore } from '@/hooks/useStore'
 
 const SORT_OPTIONS = [
-  { value: 'default',    label: 'Relevância' },
-  { value: 'name_asc',   label: 'Nome A–Z' },
-  { value: 'name_desc',  label: 'Nome Z–A' },
-  { value: 'price_asc',  label: 'Menor preço' },
+  { value: 'default', label: 'Relevância' },
+  { value: 'name_asc', label: 'Nome A–Z' },
+  { value: 'name_desc', label: 'Nome Z–A' },
+  { value: 'price_asc', label: 'Menor preço' },
   { value: 'price_desc', label: 'Maior preço' },
 ]
 
 export function CatalogPage() {
+  const { settings } = useStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [onlyAvailable, setOnlyAvailable] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const filters: CatalogFilters = {
-    search:        searchParams.get('busca') || '',
+    search: searchParams.get('busca') || '',
     category_slug: searchParams.get('categoria') || null,
-    sort:          (searchParams.get('ordem') as CatalogFilters['sort']) || 'default',
+    sort: (searchParams.get('ordem') as CatalogFilters['sort']) || 'default',
   }
 
   const loadProducts = useCallback(async () => {
@@ -71,6 +74,10 @@ export function CatalogPage() {
   }
 
   const selectedCategory = categories.find((c) => c.slug === filters.category_slug)
+  const visibleProducts = onlyAvailable
+    ? products.filter((p) => p.availability === 'available')
+    : products
+  const whatsappNumber = normalizeWhatsAppNumber(settings?.whatsapp_number || '5511999999999')
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF8]">
@@ -109,6 +116,20 @@ export function CatalogPage() {
             </form>
 
             {/* Ordenação — desktop */}
+            <button
+              type="button"
+              onClick={() => setOnlyAvailable((v) => !v)}
+              className={cn(
+                'hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold border rounded-full transition-colors',
+                onlyAvailable
+                  ? 'bg-[#111111] text-white border-[#111111]'
+                  : 'bg-white text-[#242424] border-[#EAEAEA] hover:border-[#CCCCCC]'
+              )}
+            >
+              {onlyAvailable && <Check size={12} />}
+              Pronta entrega
+            </button>
+
             <select
               value={filters.sort}
               onChange={(e) =>
@@ -245,13 +266,16 @@ export function CatalogPage() {
                 )}
                 {!loading && (
                   <span className="text-sm text-[#AAAAAA]">
-                    ({products.length} {products.length !== 1 ? 'itens' : 'item'})
+                    ({visibleProducts.length} {visibleProducts.length !== 1 ? 'itens' : 'item'})
                   </span>
                 )}
               </div>
-              {hasActiveFilters && (
+              {(hasActiveFilters || onlyAvailable) && (
                 <button
-                  onClick={clearFilters}
+                  onClick={() => {
+                    clearFilters()
+                    setOnlyAvailable(false)
+                  }}
                   className="flex items-center gap-1.5 text-xs text-[#777777] hover:text-[#111111] transition-colors border border-[#EAEAEA] hover:border-[#CCCCCC] px-3 py-1.5 rounded-full"
                 >
                   <X size={11} />
@@ -267,9 +291,9 @@ export function CatalogPage() {
                   <ProductCardSkeleton key={i} />
                 ))}
               </div>
-            ) : products.length > 0 ? (
+            ) : visibleProducts.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
-                {products.map((product) => (
+                {visibleProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
@@ -301,6 +325,19 @@ export function CatalogPage() {
           </div>
         </div>
       </div>
+
+      {/* Botão flutuante de ajuda rápida no WhatsApp */}
+      <a
+        href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+          'Olá, Alfa Eletrônicos! Estou navegando no catálogo digital e gostaria de consultar um produto.'
+        )}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 bg-[#24A850] hover:bg-[#1E8E42] text-white text-xs font-bold px-4 py-3 rounded-full shadow-lg transition-all hover:scale-105"
+      >
+        <MessageCircle size={16} />
+        <span className="hidden sm:inline">Dúvidas? Chame no WhatsApp</span>
+      </a>
 
       <PublicFooter />
     </div>

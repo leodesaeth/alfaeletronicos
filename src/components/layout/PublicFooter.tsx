@@ -6,6 +6,7 @@ import { getLogoUrl } from '@/services/storeSettings'
 import { normalizeWhatsAppNumber } from '@/lib/utils'
 import { getActiveCategories } from '@/services/categories'
 import type { Category } from '@/types'
+import { QuoteBagWidget } from '@/components/catalog/QuoteBagWidget'
 
 export function PublicFooter() {
   const { settings } = useStore()
@@ -202,6 +203,7 @@ export function PublicFooter() {
           </p>
         </div>
       </div>
+      <QuoteBagWidget />
     </footer>
   )
 }

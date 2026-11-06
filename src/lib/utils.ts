@@ -39,15 +39,23 @@ export function normalizeWhatsAppNumber(phone: string): string {
 export function buildWhatsAppLink(
   phone: string,
   productName: string,
-  productUrl: string
+  productUrl: string,
+  customTemplate?: string | null
 ): string {
   const normalized = normalizeWhatsAppNumber(phone)
-  const message = encodeURIComponent(
-    `Olá, Alfa Eletrônicos! Tenho interesse no produto *${productName}*. ` +
-    `Vi o item no catálogo de vocês: ${productUrl}. ` +
-    `Poderiam me informar mais detalhes sobre ele?`
-  )
-  return `https://wa.me/${normalized}?text=${message}`
+  let rawText = customTemplate?.trim()
+  if (rawText) {
+    rawText = rawText
+      .replace(/{produto}/gi, productName)
+      .replace(/{link}/gi, productUrl)
+  } else {
+    rawText =
+      `Olá, Alfa Eletrônicos! Tenho interesse no produto *${productName}*. ` +
+      `Vi o item no catálogo de vocês: ${productUrl}. ` +
+      `Poderiam me informar mais detalhes sobre ele?`
+  }
+
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(rawText)}`
 }
 
 // Trunca texto com reticências

@@ -1,10 +1,17 @@
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import type { StoreSettings, StoreSettingsFormData } from '@/types'
 import { SHOWCASE_SETTINGS } from '@/lib/showcaseData'
+import {
+  getExtendedStoreConfig,
+  saveExtendedStoreConfig,
+} from '@/services/catalogIntelligence'
 
 // Busca configurações da loja
 export async function getStoreSettings(): Promise<StoreSettings | null> {
-  if (!isSupabaseConfigured) return SHOWCASE_SETTINGS
+  const ext = await getExtendedStoreConfig()
+  if (!isSupabaseConfigured) {
+    return { ...SHOWCASE_SETTINGS, ...ext }
+  }
 
   const { data, error } = await supabase
     .from('store_settings')
@@ -12,8 +19,8 @@ export async function getStoreSettings(): Promise<StoreSettings | null> {
     .limit(1)
     .single()
 
-  if (error) return SHOWCASE_SETTINGS
-  return data
+  if (error || !data) return { ...SHOWCASE_SETTINGS, ...ext }
+  return { ...data, ...ext }
 }
 
 // Atualiza configurações da loja
@@ -39,6 +46,12 @@ export async function updateStoreSettings(
   if (formData.footer_text !== undefined)
     updates.footer_text = formData.footer_text || null
 
+  // Salva configurações estendidas (template WhatsApp e banner do Hero) no bucket store-assets
+  await saveExtendedStoreConfig({
+    whatsapp_message_template: formData.whatsapp_message_template || '',
+    hero_image_url: formData.hero_image_url || '',
+  })
+
   if (id === 'showcase-settings') {
     const { data: existing } = await supabase
       .from('store_settings')
@@ -54,7 +67,11 @@ export async function updateStoreSettings(
         .select()
         .single()
       if (error) throw new Error(error.message)
-      return data
+      return {
+        ...data,
+        whatsapp_message_template: formData.whatsapp_message_template || null,
+        hero_image_url: formData.hero_image_url || null,
+      }
     } else {
       const { data, error } = await supabase
         .from('store_settings')
@@ -62,7 +79,11 @@ export async function updateStoreSettings(
         .select()
         .single()
       if (error) throw new Error(error.message)
-      return data
+      return {
+        ...data,
+        whatsapp_message_template: formData.whatsapp_message_template || null,
+        hero_image_url: formData.hero_image_url || null,
+      }
     }
   }
 
@@ -74,7 +95,11 @@ export async function updateStoreSettings(
     .single()
 
   if (error) throw new Error(error.message)
-  return data
+  return {
+    ...data,
+    whatsapp_message_template: formData.whatsapp_message_template || null,
+    hero_image_url: formData.hero_image_url || null,
+  }
 }
 
 // Upload de logo da loja

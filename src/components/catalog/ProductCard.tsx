@@ -1,10 +1,17 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageCircle, Package } from 'lucide-react'
+import { MessageCircle, Package, ShoppingBag, Check } from 'lucide-react'
 import type { Product } from '@/types'
 import { AVAILABILITY_LABELS } from '@/types'
-import { formatBRL, buildWhatsAppLink, truncate } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+import { formatBRL, buildWhatsAppLink, truncate, cn } from '@/lib/utils'
 import { useStore } from '@/hooks/useStore'
+import {
+  getAllProductMeta,
+  recordWhatsAppClick,
+  type ProductMetaItem,
+} from '@/services/catalogIntelligence'
+import { addToQuoteBag } from '@/lib/quoteBag'
+import toast from 'react-hot-toast'
 
 interface ProductCardProps {
   product: Product
@@ -19,15 +26,60 @@ function getPrimaryImage(product: Product): string | null {
 
 export function ProductCard({ product, hideFeaturedBadge = false }: ProductCardProps) {
   const { settings } = useStore()
+  const [meta, setMeta] = useState<ProductMetaItem | null>(null)
+  const [justAdded, setJustAdded] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    getAllProductMeta()
+      .then((map) => {
+        if (mounted && map[product.id]) {
+          setMeta(map[product.id])
+        }
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [product.id])
+
   const primaryImage = getPrimaryImage(product)
   const productUrl = `${window.location.origin}/produto/${product.slug}`
   const whatsappNumber = settings?.whatsapp_number || '5511999999999'
+  const customTemplate = settings?.whatsapp_message_template
 
-  const whatsappLink = buildWhatsAppLink(whatsappNumber, product.name, productUrl)
+  const whatsappLink = buildWhatsAppLink(
+    whatsappNumber,
+    product.name,
+    productUrl,
+    customTemplate
+  )
+
+  const price = product.price || 0
+  const compareAt = meta?.compare_at_price || 0
+  const hasDiscount = product.show_price && price > 0 && compareAt > price
+  const discountPct = hasDiscount
+    ? Math.round(((compareAt - price) / compareAt) * 100)
+    : 0
+
+  const stock = meta?.stock_quantity
+  const lowThreshold = meta?.low_stock_threshold ?? 2
+  const isLowStock =
+    product.availability === 'available' &&
+    stock !== undefined &&
+    stock !== null &&
+    stock > 0 &&
+    stock <= lowThreshold
+
+  const handleAddToBag = () => {
+    addToQuoteBag(product)
+    setJustAdded(true)
+    toast.success(`"${product.name}" adicionado à sacola de orçamento!`)
+    setTimeout(() => setJustAdded(false), 1800)
+  }
 
   return (
     <article className="group bg-[#FFFFFF] rounded-2xl border border-[#EAEAEA] hover:border-[#D5D5D5] shadow-[0_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.09)] transition-all duration-300 overflow-hidden flex flex-col p-3.5 sm:p-4">
-
       {/* ── Fotografia em Fundo Branco Puro (#FFFFFF) ───────────── */}
       <Link
         to={`/produto/${product.slug}`}
@@ -58,6 +110,13 @@ export function ProductCard({ product, hideFeaturedBadge = false }: ProductCardP
             Destaque
           </div>
         )}
+
+        {/* Badge Promocional -X% OFF (Editorial Sóburio) */}
+        {hasDiscount && discountPct > 0 && (
+          <div className="absolute top-2 right-2 bg-[#166534] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+            -{discountPct}%
+          </div>
+        )}
       </Link>
 
       {/* ── Informações ─────────────────────────────────────────── */}
@@ -79,6 +138,14 @@ export function ProductCard({ product, hideFeaturedBadge = false }: ProductCardP
 
         <div className="flex-1" />
 
+        {/* Indicador discreto de últimas unidades (sem emojis) */}
+        {isLowStock && (
+          <span className="inline-flex w-fit items-center gap-1.5 text-[10px] font-semibold text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] px-2 py-0.5 rounded-full mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
+            Última{stock === 1 ? '' : 's'} {stock} un.
+          </span>
+        )}
+
         {/* Status discreto apenas se não estiver disponível imediatamente */}
         {product.availability !== 'available' && (
           <span
@@ -92,28 +159,50 @@ export function ProductCard({ product, hideFeaturedBadge = false }: ProductCardP
           </span>
         )}
 
-        {/* Preço */}
+        {/* Preço Normal ou Promocional De / Por */}
         {product.show_price && product.price !== null && product.price > 0 ? (
-          <p className="text-base font-extrabold text-[#111111] tabular-nums mt-1.5">
-            {formatBRL(product.price)}
-          </p>
+          <div className="mt-1.5">
+            {hasDiscount && (
+              <p className="text-[11px] text-[#999999] line-through tabular-nums leading-none mb-0.5">
+                De {formatBRL(compareAt)}
+              </p>
+            )}
+            <p className="text-base font-extrabold text-[#111111] tabular-nums leading-tight">
+              {formatBRL(product.price)}
+            </p>
+          </div>
         ) : (
           <p className="text-xs font-semibold text-[#555555] mt-1.5">
             Consulte o preço
           </p>
         )}
 
-        {/* ── Botão WhatsApp pílula ──────────────────────────────── */}
-        <div className="mt-2.5">
+        {/* ── Botão WhatsApp pílula + Botão Sacola de Orçamento ──── */}
+        <div className="mt-2.5 flex items-center gap-1.5">
           <a
             href={whatsappLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full bg-[#24A850] hover:bg-[#1E8E42] text-white text-xs font-semibold py-2.5 px-4 rounded-full transition-colors duration-150 shadow-sm"
+            onClick={() => recordWhatsAppClick(product.id)}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-[#24A850] hover:bg-[#1E8E42] text-white text-xs font-semibold py-2.5 px-3 rounded-full transition-colors duration-150 shadow-sm"
           >
             <MessageCircle size={14} />
             Falar no WhatsApp
           </a>
+
+          <button
+            type="button"
+            onClick={handleAddToBag}
+            title="Adicionar à sacola para cotar vários produtos juntos"
+            className={cn(
+              'w-9 h-9 rounded-full border flex items-center justify-center shrink-0 transition-all',
+              justAdded
+                ? 'bg-[#111111] text-white border-[#111111]'
+                : 'bg-[#F8F8F8] hover:bg-[#111111] text-[#242424] hover:text-white border-[#EAEAEA]'
+            )}
+          >
+            {justAdded ? <Check size={14} /> : <ShoppingBag size={14} />}
+          </button>
         </div>
       </div>
     </article>
@@ -124,7 +213,7 @@ export function ProductCard({ product, hideFeaturedBadge = false }: ProductCardP
 export function ProductCardSkeleton() {
   return (
     <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 overflow-hidden flex flex-col animate-pulse">
-      <div className="aspect-[4/3] bg-[#F2F2F2] rounded-xl mb-3" />
+      <div className="aspect-[1/1] bg-[#F2F2F2] rounded-xl mb-3" />
       <div className="flex flex-col gap-2.5">
         <div className="h-4 w-3/4 bg-[#F2F2F2] rounded" />
         <div className="h-3 w-full bg-[#F2F2F2] rounded" />

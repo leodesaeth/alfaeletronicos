@@ -8,6 +8,10 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ShoppingBag,
+  ShieldCheck,
+  Zap,
+  CheckCircle2,
 } from 'lucide-react'
 import { getPublishedProductBySlug, getRelatedProducts } from '@/services/products'
 import type { Product } from '@/types'
@@ -19,6 +23,13 @@ import { PublicHeader } from '@/components/layout/PublicHeader'
 import { PublicFooter } from '@/components/layout/PublicFooter'
 import { ProductCard } from '@/components/catalog/ProductCard'
 import { PageLoader } from '@/components/ui/StateComponents'
+import {
+  getAllProductMeta,
+  recordWhatsAppClick,
+  type ProductMetaItem,
+} from '@/services/catalogIntelligence'
+import { addToQuoteBag, openQuoteBagDrawer } from '@/lib/quoteBag'
+import toast from 'react-hot-toast'
 
 export function ProductPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -30,6 +41,9 @@ export function ProductPage() {
   const [notFound, setNotFound] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [variations, setVariations] = useState<string[]>([])
+  const [selectedVariation, setSelectedVariation] = useState<string>('')
+  const [prodMeta, setProdMeta] = useState<ProductMetaItem | null>(null)
 
   useEffect(() => {
     if (!slug) return
@@ -43,6 +57,13 @@ export function ProductPage() {
           return
         }
         setProduct(data)
+
+        const metaMap = await getAllProductMeta()
+        const metaItem = metaMap[data.id] || null
+        setProdMeta(metaItem)
+        const prodVariations = metaItem?.variations || []
+        setVariations(prodVariations)
+        setSelectedVariation(prodVariations[0] || '')
 
         if (data.category_id) {
           const rel = await getRelatedProducts(data.id, data.category_id, 4)
@@ -96,7 +117,16 @@ export function ProductPage() {
   const currentImage = sortedImages[activeImage]
   const productUrl = `${window.location.origin}/produto/${product.slug}`
   const whatsappNumber = settings?.whatsapp_number || '5511999999999'
-  const whatsappLink = buildWhatsAppLink(whatsappNumber, product.name, productUrl)
+  const customTemplate = settings?.whatsapp_message_template
+  const productLabelWithVariation = selectedVariation
+    ? `${product.name} (${selectedVariation})`
+    : product.name
+  const whatsappLink = buildWhatsAppLink(
+    whatsappNumber,
+    productLabelWithVariation,
+    productUrl,
+    customTemplate
+  )
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -251,22 +281,45 @@ export function ProductPage() {
               {product.name}
             </h1>
 
-            {/* Disponibilidade */}
-            <span
-              className={cn(
-                'inline-flex w-fit items-center text-xs font-semibold px-3 py-1 rounded-full',
-                product.availability === 'available'   && 'text-[#166534] bg-[#F0FDF4]',
-                product.availability === 'unavailable' && 'text-[#991B1B] bg-[#FEF2F2]',
-                product.availability === 'on_request'  && 'text-[#92400E] bg-[#FFFBEB]',
-              )}
-            >
-              {AVAILABILITY_LABELS[product.availability]}
-            </span>
+            {/* Disponibilidade + Gatilho de Escassez */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  'inline-flex w-fit items-center text-xs font-semibold px-3 py-1 rounded-full',
+                  product.availability === 'available'   && 'text-[#166534] bg-[#F0FDF4]',
+                  product.availability === 'unavailable' && 'text-[#991B1B] bg-[#FEF2F2]',
+                  product.availability === 'on_request'  && 'text-[#92400E] bg-[#FFFBEB]',
+                )}
+              >
+                {AVAILABILITY_LABELS[product.availability]}
+              </span>
 
-            {/* Preço */}
+              {product.availability === 'available' &&
+                prodMeta?.stock_quantity !== undefined &&
+                prodMeta?.stock_quantity !== null &&
+                prodMeta.stock_quantity > 0 &&
+                prodMeta.stock_quantity <= (prodMeta.low_stock_threshold ?? 2) && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#92400E] bg-[#FFFBEB] border border-[#FDE68A] px-3 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
+                    Última{prodMeta.stock_quantity === 1 ? '' : 's'} {prodMeta.stock_quantity} unidade{prodMeta.stock_quantity === 1 ? '' : 's'} a pronta entrega
+                  </span>
+                )}
+            </div>
+
+            {/* Preço Normal ou Promocional De / Por */}
             {product.show_price && product.price !== null && product.price > 0 && (
-              <div className="py-4 border-t border-b border-[#EAEAEA]">
-                <p className="text-3xl font-bold text-[#111111] tracking-tight">
+              <div className="py-4 border-t border-b border-[#EAEAEA] space-y-1">
+                {prodMeta?.compare_at_price && prodMeta.compare_at_price > product.price && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[#999999] line-through tabular-nums">
+                      De {formatBRL(prodMeta.compare_at_price)}
+                    </span>
+                    <span className="text-[11px] font-bold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2.5 py-0.5 rounded-full">
+                      -{Math.round(((prodMeta.compare_at_price - product.price) / prodMeta.compare_at_price) * 100)}% • Economize {formatBRL(prodMeta.compare_at_price - product.price)}
+                    </span>
+                  </div>
+                )}
+                <p className="text-3xl font-bold text-[#111111] tracking-tight tabular-nums">
                   {formatBRL(product.price)}
                 </p>
               </div>
@@ -288,24 +341,82 @@ export function ProductPage() {
               </div>
             )}
 
+            {/* Variações disponíveis */}
+            {variations.length > 0 && (
+              <div className="flex flex-col gap-2 py-2">
+                <span className="text-xs font-semibold text-[#555555] uppercase tracking-wider">
+                  Opções / Variações:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {variations.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setSelectedVariation(v)}
+                      className={cn(
+                        'px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all',
+                        selectedVariation === v
+                          ? 'bg-[#111111] text-white border-[#111111]'
+                          : 'bg-white text-[#242424] border-[#DCDCDC] hover:border-[#111111]'
+                      )}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Ações */}
             <div className="flex flex-col gap-3 pt-1">
               {whatsappLink ? (
-                <a
-                  href={whatsappLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2.5 bg-[#25D366] hover:bg-[#1EB854] text-white font-semibold text-sm px-6 py-4 rounded-xl transition-colors duration-150"
-                >
-                  <MessageCircle size={18} />
-                  Falar no WhatsApp
-                </a>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => recordWhatsAppClick(product.id)}
+                    className="flex-1 flex items-center justify-center gap-2.5 bg-[#24A850] hover:bg-[#1E8E42] text-white font-semibold text-sm px-6 py-4 rounded-xl transition-colors duration-150 shadow-sm"
+                  >
+                    <MessageCircle size={18} />
+                    Falar no WhatsApp
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addToQuoteBag(product, selectedVariation || undefined, 1)
+                      toast.success('Adicionado à sacola de orçamento!')
+                      openQuoteBagDrawer()
+                    }}
+                    className="flex items-center justify-center gap-2 bg-[#111111] hover:bg-[#242424] text-white font-semibold text-sm px-5 py-4 rounded-xl transition-colors duration-150"
+                  >
+                    <ShoppingBag size={17} />
+                    + Sacola de Orçamento
+                  </button>
+                </div>
               ) : (
                 <div className="flex items-center gap-2.5 text-sm text-[#777777] bg-[#F5F5F5] border border-[#EAEAEA] px-4 py-3 rounded-xl">
                   <AlertCircle size={15} />
                   WhatsApp não configurado.
                 </div>
               )}
+
+              {/* 3 Selos de Confiança Alfa Eletrônicos */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-[#EAEAEA] text-xs text-[#242424]">
+                  <ShieldCheck size={16} className="text-[#24A850] shrink-0" />
+                  <span className="font-medium">Original e com Garantia</span>
+                </div>
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-[#EAEAEA] text-xs text-[#242424]">
+                  <Zap size={16} className="text-[#24A850] shrink-0" />
+                  <span className="font-medium">Pronta Entrega Rápida</span>
+                </div>
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-[#EAEAEA] text-xs text-[#242424]">
+                  <CheckCircle2 size={16} className="text-[#24A850] shrink-0" />
+                  <span className="font-medium">Atendimento Direto</span>
+                </div>
+              </div>
 
               <div className="flex gap-3">
                 <Link
@@ -360,6 +471,7 @@ export function ProductPage() {
             href={whatsappLink}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => recordWhatsAppClick(product.id)}
             className="flex-1 max-w-[220px] flex items-center justify-center gap-2 bg-[#24A850] hover:bg-[#1E8E42] text-white font-semibold text-xs py-3 px-4 rounded-full transition-colors shadow-sm"
           >
             <MessageCircle size={15} />

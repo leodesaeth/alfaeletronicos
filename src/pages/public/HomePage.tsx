@@ -93,12 +93,20 @@ export function HomePage() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
 
+  const heroSlides = [
+    {
+      id: 1,
+      image: settings?.hero_image_url || '/showcase/hero-devices.png?v=2',
+      alt: 'Smartphones, perfumes importados e fones Bluetooth premium na Alfa Eletrônicos',
+    },
+  ]
+
   const rawTitle = settings?.hero_title || 'Tudo o que você precisa,\nem um só lugar.'
   const titleLines = rawTitle.includes('\n')
     ? rawTitle.split('\n')
     : rawTitle.includes(',')
-    ? [rawTitle.split(',')[0] + ',', rawTitle.split(',').slice(1).join(',').trim()]
-    : [rawTitle]
+      ? [rawTitle.split(',')[0] + ',', rawTitle.split(',').slice(1).join(',').trim()]
+      : [rawTitle]
 
   const heroDesc =
     settings?.hero_description ||
@@ -134,12 +142,12 @@ export function HomePage() {
   }, [])
 
   const nextSlide = useCallback(() => {
-    setCurrentSlide((s) => (s + 1) % HERO_SLIDES.length)
-  }, [])
+    setCurrentSlide((s) => (s + 1) % heroSlides.length)
+  }, [heroSlides.length])
 
   const prevSlide = useCallback(() => {
-    setCurrentSlide((s) => (s - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)
-  }, [])
+    setCurrentSlide((s) => (s - 1 + heroSlides.length) % heroSlides.length)
+  }, [heroSlides.length])
 
   useEffect(() => {
     if (isPaused) return
@@ -200,7 +208,7 @@ export function HomePage() {
 
             {/* ── Coluna direita: composição fotográfica integrada ── */}
             <div className="lg:col-span-6 flex items-center justify-center relative h-[280px] sm:h-[340px] lg:h-[400px]">
-              {HERO_SLIDES.map((slide, i) => (
+              {heroSlides.map((slide, i) => (
                 <img
                   key={slide.id}
                   src={slide.image}
@@ -211,9 +219,8 @@ export function HomePage() {
                     maskImage:
                       'radial-gradient(ellipse 75% 75% at 50% 50%, #000 68%, transparent 100%)',
                   }}
-                  className={`absolute inset-0 w-full h-full object-contain object-center mix-blend-lighten transition-all duration-700 ${
-                    i === currentSlide ? 'opacity-100 scale-105' : 'opacity-0 scale-95 pointer-events-none'
-                  }`}
+                  className={`absolute inset-0 w-full h-full object-contain object-center mix-blend-lighten transition-all duration-700 ${i === currentSlide ? 'opacity-100 scale-105' : 'opacity-0 scale-95 pointer-events-none'
+                    }`}
                   loading={i === 0 ? 'eager' : 'lazy'}
                 />
               ))}
@@ -221,9 +228,9 @@ export function HomePage() {
           </div>
 
           {/* ── Indicadores (dots) se houver mais de 1 banner ─────── */}
-          {HERO_SLIDES.length > 1 && (
+          {heroSlides.length > 1 && (
             <div className="flex justify-center items-center gap-1 pb-4">
-              {HERO_SLIDES.map((_, i) => (
+              {heroSlides.map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setCurrentSlide(i)}
@@ -231,11 +238,10 @@ export function HomePage() {
                   aria-label={`Ir para banner ${i + 1}`}
                 >
                   <span
-                    className={`block rounded-full transition-all duration-300 ${
-                      i === currentSlide
+                    className={`block rounded-full transition-all duration-300 ${i === currentSlide
                         ? 'w-2.5 h-2.5 bg-white'
                         : 'w-2 h-2 bg-white/30 hover:bg-white/60 border border-white/40'
-                    }`}
+                      }`}
                   />
                 </button>
               ))}
@@ -244,7 +250,7 @@ export function HomePage() {
         </div>
 
         {/* ── Setas laterais (exibidas quando houver múltiplos slides) ── */}
-        {HERO_SLIDES.length > 1 && (
+        {heroSlides.length > 1 && (
           <>
             <button
               onClick={prevSlide}

@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Package,
+  Boxes,
+  DollarSign,
   Tag,
   Settings,
   ExternalLink,
@@ -20,6 +22,8 @@ import toast from 'react-hot-toast'
 const navItems = [
   { to: '/admin', label: 'Visão geral', icon: LayoutDashboard, exact: true },
   { to: '/admin/produtos', label: 'Produtos', icon: Package },
+  { to: '/admin/estoque', label: 'Estoque & Alertas', icon: Boxes },
+  { to: '/admin/financeiro', label: 'Financeiro & DRE', icon: DollarSign },
   { to: '/admin/categorias', label: 'Categorias', icon: Tag },
   { to: '/admin/configuracoes', label: 'Aparência e loja', icon: Settings },
 ]

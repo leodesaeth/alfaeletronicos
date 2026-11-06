@@ -117,6 +117,19 @@ export async function getCategoryProductCount(categoryId: string): Promise<numbe
   return count || 0
 }
 
+// Transfere todos os produtos de uma categoria para outra (antes de excluir)
+export async function transferCategoryProducts(
+  fromCategoryId: string,
+  toCategoryId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('products')
+    .update({ category_id: toCategoryId })
+    .eq('category_id', fromCategoryId)
+
+  if (error) throw new Error(error.message)
+}
+
 // Exclui categoria (apenas se não tiver produtos)
 export async function deleteCategory(id: string): Promise<void> {
   const productCount = await getCategoryProductCount(id)

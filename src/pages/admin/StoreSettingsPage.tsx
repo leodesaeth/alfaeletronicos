@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Save, Upload, Phone, Loader2, CheckCircle } from 'lucide-react'
+import { Save, Upload, Phone, Loader2, CheckCircle, RotateCcw } from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { getStoreSettings, updateStoreSettings, uploadStoreLogo, getLogoUrl } from '@/services/storeSettings'
+import { uploadHeroBannerImage } from '@/services/catalogIntelligence'
 import type { StoreSettings } from '@/types'
 import { Input, Textarea } from '@/components/ui/FormFields'
 import { Button } from '@/components/ui/Button'
@@ -16,12 +17,15 @@ export function StoreSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
+  const [heroUploading, setHeroUploading] = useState(false)
   const [saved, setSaved] = useState(false)
 
   const [form, setForm] = useState({
     store_name: '',
     store_description: '',
     whatsapp_number: '',
+    whatsapp_message_template: '',
+    hero_image_url: '',
     primary_color: '#1769FF',
     hero_title: '',
     hero_description: '',
@@ -38,6 +42,8 @@ export function StoreSettingsPage() {
           store_name: data.store_name || '',
           store_description: data.store_description || '',
           whatsapp_number: data.whatsapp_number || '',
+          whatsapp_message_template: data.whatsapp_message_template || '',
+          hero_image_url: data.hero_image_url || '',
           primary_color: data.primary_color || '#1769FF',
           hero_title: data.hero_title || '',
           hero_description: data.hero_description || '',
@@ -122,13 +128,28 @@ export function StoreSettingsPage() {
     }
   }
 
+  const handleHeroBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setHeroUploading(true)
+    try {
+      const publicUrl = await uploadHeroBannerImage(file)
+      update('hero_image_url', publicUrl)
+      toast.success('Imagem do Hero enviada! Clique em Salvar para publicar.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar banner.')
+    } finally {
+      setHeroUploading(false)
+    }
+  }
+
   if (loading) return <AdminLayout><PageLoader /></AdminLayout>
 
   const logoUrl = getLogoUrl(settings?.logo_path ?? null)
 
   return (
     <AdminLayout>
-      <div className="flex flex-col gap-5 max-w-2xl">
+      <div className="flex flex-col gap-5 max-w-3xl mx-auto w-full">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -198,27 +219,84 @@ export function StoreSettingsPage() {
 
         {/* Página inicial */}
         <section className="bg-white rounded-2xl shadow-card p-5 sm:p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-graphite">Página inicial (hero)</h2>
+          <h2 className="font-semibold text-graphite">Página inicial (Hero e Vitrine)</h2>
           <Input
-            label="Título principal"
+            label="Título principal do Hero"
             value={form.hero_title}
             onChange={(e) => update('hero_title', e.target.value)}
-            placeholder="Encontre os melhores eletrônicos"
+            placeholder="Tudo o que você precisa, em um só lugar."
           />
           <Textarea
-            label="Descrição"
+            label="Descrição do Hero"
             value={form.hero_description}
             onChange={(e) => update('hero_description', e.target.value)}
-            placeholder="Explore nosso catálogo com qualidade e confiança."
+            placeholder="Eletrônicos, acessórios, perfumes e muito mais, com qualidade e as melhores opções."
             rows={2}
           />
+          <div className="flex flex-col gap-3 pt-1">
+            <label className="text-sm font-medium text-graphite">
+              Imagem de destaque do Hero Banner
+            </label>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="w-28 h-20 rounded-xl bg-[#111111] border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                <img
+                  src={form.hero_image_url || '/showcase/hero-devices.png?v=2'}
+                  alt="Preview Hero"
+                  className="w-full h-full object-contain p-1.5"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label
+                    htmlFor="hero-banner-upload"
+                    className={`inline-flex items-center gap-2 text-xs font-semibold bg-[#111111] text-white hover:bg-[#242424] px-3.5 py-2 rounded-lg cursor-pointer transition-colors ${heroUploading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                  >
+                    {heroUploading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Upload size={14} />
+                    )}
+                    {heroUploading ? 'Enviando...' : 'Enviar nova imagem'}
+                  </label>
+                  <input
+                    id="hero-banner-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={heroUploading}
+                    onChange={handleHeroBannerUpload}
+                  />
+                  {form.hero_image_url && (
+                    <button
+                      type="button"
+                      onClick={() => update('hero_image_url', '')}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-[#111111] px-3 py-2 rounded-lg border border-gray-200 transition-colors"
+                    >
+                      <RotateCcw size={13} />
+                      Restaurar padrão de estúdio
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted">
+                  Recomendado: imagem com fundo escuro (`#111111`) ou PNG transparente.
+                </p>
+              </div>
+            </div>
+            <Input
+              label="Ou cole a URL da imagem do Hero (Opcional)"
+              value={form.hero_image_url}
+              onChange={(e) => update('hero_image_url', e.target.value)}
+              placeholder="Em branco = usa a composição de estúdio padrão"
+            />
+          </div>
         </section>
 
         {/* WhatsApp */}
         <section className="bg-white rounded-2xl shadow-card p-5 sm:p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <Phone size={18} className="text-whatsapp" />
-            <h2 className="font-semibold text-graphite">WhatsApp comercial</h2>
+            <h2 className="font-semibold text-graphite">WhatsApp comercial & Atendimento</h2>
           </div>
           <Input
             label="Número de WhatsApp"
@@ -228,6 +306,16 @@ export function StoreSettingsPage() {
             hint="Somente números, com código do país. Ex: 5511999999999"
             type="tel"
           />
+
+          <Textarea
+            label="Mensagem padrão de consulta de produto"
+            value={form.whatsapp_message_template}
+            onChange={(e) => update('whatsapp_message_template', e.target.value)}
+            placeholder="Olá! Vi o produto {produto} no catálogo da Alfa e gostaria de saber a disponibilidade..."
+            rows={2}
+            hint="Use {produto} e {link} como marcadores dinâmicos que o sistema substitui automaticamente."
+          />
+
           {form.whatsapp_number && (
             <div className="text-xs text-muted bg-surface border border-gray-200 rounded-lg px-3 py-2">
               Prévia do link:{' '}
