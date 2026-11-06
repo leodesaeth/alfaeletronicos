@@ -719,56 +719,56 @@ export function InventoryPage() {
           </div>
         )}
 
-        {/* Navegação entre as 4 Abas */}
-        <div className="flex items-center justify-between flex-wrap gap-3 border-b border-[#EAEAEA] pb-3">
-          <div className="flex items-center gap-2 flex-wrap">
+        {/* Navegação entre as 4 Abas (Deslizante no Mobile) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EAEAEA] pb-3">
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
             <button
               type="button"
               onClick={() => setActiveTab('inventory')}
               className={cn(
-                'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
+                'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shrink-0',
                 activeTab === 'inventory'
                   ? 'bg-[#111111] text-white'
                   : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
               )}
             >
               <Boxes size={14} />
-              Estoque, Custos & Margem
+              Estoque & Margem
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('financial')}
               className={cn(
-                'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
+                'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shrink-0',
                 activeTab === 'financial'
                   ? 'bg-[#111111] text-white'
                   : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
               )}
             >
               <PieChart size={14} />
-              DRE Financeiro & Despesas
+              DRE & Despesas
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('abc')}
               className={cn(
-                'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
+                'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shrink-0',
                 activeTab === 'abc'
                   ? 'bg-[#111111] text-white'
                   : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
               )}
             >
               <TrendingUp size={14} />
-              Curva ABC & Dinheiro Parado
+              Curva ABC
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('history')}
               className={cn(
-                'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
+                'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shrink-0',
                 activeTab === 'history'
                   ? 'bg-[#111111] text-white'
                   : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
@@ -780,14 +780,14 @@ export function InventoryPage() {
           </div>
 
           {activeTab === 'inventory' && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2">
               <div className="flex items-center gap-2 bg-white border border-[#EAEAEA] rounded-xl px-3 py-1.5">
-                <Search size={14} className="text-[#767676]" />
+                <Search size={14} className="text-[#767676] shrink-0" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar produto..."
-                  className="text-xs text-[#111111] outline-none w-40"
+                  className="text-xs text-[#111111] outline-none w-full sm:w-40"
                 />
               </div>
 

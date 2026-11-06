@@ -531,25 +531,25 @@ export function DashboardPage() {
 
   return (
     <AdminLayout>
-      <div className="max-w-6xl mx-auto w-full space-y-6">
-        {/* ── 1. HEADER EXECUTIVO SÓBRIO (CARBONO & VERDE ALFA) ── */}
-        <div className="bg-[#111111] rounded-2xl p-6 text-white border border-white/10">
+      <div className="max-w-6xl mx-auto w-full space-y-4 sm:space-y-6">
+        {/* ── 1. HEADER EXECUTIVO SÓBRIO (OTIMIZADO PARA MOBILE E DESKTOP) ── */}
+        <div className="bg-[#111111] rounded-2xl p-4 sm:p-6 text-white border border-white/10">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#24A850]" />
                   Sistema Online
                 </span>
-                <span className="text-xs text-white/50">
+                <span className="text-[11px] sm:text-xs text-white/50">
                   {new Date().toLocaleDateString('pt-BR', {
-                    weekday: 'long',
+                    weekday: 'short',
                     day: '2-digit',
-                    month: 'long',
+                    month: 'short',
                   })}
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white">
                 {greeting}, {settings?.store_name || 'Alfa Eletrônicos'}
               </h1>
               <p className="text-xs sm:text-sm text-white/60 mt-0.5">
@@ -557,11 +557,11 @@ export function DashboardPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setQrModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-colors"
               >
                 <QrCode size={14} /> QR Code
               </button>
@@ -569,7 +569,7 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={handleCopyCatalogLink}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-colors"
               >
                 {copiedCatalogUrl ? <Check size={14} className="text-[#24A850]" /> : <Copy size={14} />}
                 {copiedCatalogUrl ? 'Copiado' : 'Copiar Link'}
@@ -578,34 +578,34 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={handleShareCatalogWhatsApp}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#24A850] hover:bg-[#1E8E42] text-xs font-semibold text-white transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#24A850] hover:bg-[#1E8E42] text-xs font-semibold text-white transition-colors"
               >
-                <Share2 size={14} /> Compartilhar WhatsApp
+                <Share2 size={14} /> WhatsApp
               </button>
 
               <a
                 href="/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-[#111111] hover:bg-gray-100 text-xs font-semibold transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white text-[#111111] hover:bg-gray-100 text-xs font-semibold transition-colors"
               >
-                <ExternalLink size={14} /> Abrir Catálogo
+                <ExternalLink size={14} /> Ver Loja
               </a>
             </div>
           </div>
 
           {/* Barra de Meta Mensal */}
-          <div className="mt-5 pt-4 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="mt-4 sm:mt-5 pt-4 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center shrink-0">
                 <Target size={17} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-white/70 font-medium">
-                    Meta de Faturamento Mensal ({dashboardData.goalPct}%)
+                <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
+                  <span className="text-white/70 font-medium truncate">
+                    Meta Mensal ({dashboardData.goalPct}%)
                   </span>
-                  <span className="font-bold text-white tabular-nums">
+                  <span className="font-bold text-white tabular-nums shrink-0 text-[11px] sm:text-xs">
                     {formatBRL(dashboardData.monthGrossRevenue)} / {formatBRL(dashboardData.goal)}
                   </span>
                 </div>
@@ -618,16 +618,16 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
               <Link
                 to="/admin/financeiro"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
               >
-                <DollarSign size={14} /> Abrir PDV / Caixa
+                <DollarSign size={14} /> Abrir Caixa
               </Link>
               <Link
                 to="/admin/produtos/novo"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
               >
                 <Plus size={14} /> Novo Produto
               </Link>
@@ -635,157 +635,169 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* ── 2. 6 INDICADORES EXECUTIVOS (HIERARQUIA MONOCROMÁTICA + SEMÂNTICA) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* ── 2. 6 INDICADORES EXECUTIVOS (GRADE 2x3 COMPACTA NO MOBILE) ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-4">
           <Link
             to="/admin/financeiro"
-            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-4 transition-all"
+            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-3.5 sm:p-4 transition-all"
           >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
-                <DollarSign size={16} />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
+                <DollarSign size={15} />
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#767676]">
-                Mês Atual
+                Mês
               </span>
             </div>
-            <p className="text-lg font-extrabold text-[#111111] tabular-nums">
+            <p className="text-base sm:text-lg font-extrabold text-[#111111] tabular-nums truncate">
               {formatBRL(dashboardData.monthGrossRevenue)}
             </p>
-            <p className="text-xs font-medium text-[#767676] mt-0.5">Faturamento Bruto</p>
-            <p className="text-[11px] text-[#166534] font-semibold mt-1 tabular-nums">
-              Líquido: {formatBRL(dashboardData.monthNetProfit)}
+            <p className="text-[11px] sm:text-xs font-medium text-[#767676] mt-0.5 truncate">
+              Faturamento Bruto
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-[#166534] font-semibold mt-1 tabular-nums truncate">
+              Líq: {formatBRL(dashboardData.monthNetProfit)}
             </p>
           </Link>
 
           <Link
             to="/admin/estoque"
-            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-4 transition-all"
+            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-3.5 sm:p-4 transition-all"
           >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
-                <Wallet size={16} />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
+                <Wallet size={15} />
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#767676]">
                 Estoque
               </span>
             </div>
-            <p className="text-lg font-extrabold text-[#111111] tabular-nums">
+            <p className="text-base sm:text-lg font-extrabold text-[#111111] tabular-nums truncate">
               {formatBRL(dashboardData.totalSalePotential)}
             </p>
-            <p className="text-xs font-medium text-[#767676] mt-0.5">Valor de Venda</p>
-            <p className="text-[11px] text-[#767676] mt-1 tabular-nums">
+            <p className="text-[11px] sm:text-xs font-medium text-[#767676] mt-0.5 truncate">
+              Valor de Venda
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 tabular-nums truncate">
               Custo: {formatBRL(dashboardData.totalCostInvested)}
             </p>
           </Link>
 
           <Link
             to="/admin/estoque"
-            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-4 transition-all"
+            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-3.5 sm:p-4 transition-all"
           >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] text-[#166534] flex items-center justify-center">
-                <TrendingUp size={16} />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F0FDF4] text-[#166534] flex items-center justify-center">
+                <TrendingUp size={15} />
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#166534]">
                 Margem
               </span>
             </div>
-            <p className="text-lg font-extrabold text-[#166534] tabular-nums">
+            <p className="text-base sm:text-lg font-extrabold text-[#166534] tabular-nums truncate">
               +{formatBRL(dashboardData.projectedStockProfit)}
             </p>
-            <p className="text-xs font-medium text-[#767676] mt-0.5">Lucro Projetado</p>
-            <p className="text-[11px] text-[#767676] mt-1">
-              {dashboardData.totalUnitsInStock} unidades físicas
+            <p className="text-[11px] sm:text-xs font-medium text-[#767676] mt-0.5 truncate">
+              Lucro Projetado
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 truncate">
+              {dashboardData.totalUnitsInStock} un. físicas
             </p>
           </Link>
 
           <Link
             to="/admin/produtos"
-            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-4 transition-all"
+            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-3.5 sm:p-4 transition-all"
           >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
-                <MessageCircle size={16} />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
+                <MessageCircle size={15} />
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#767676]">
                 Demanda
               </span>
             </div>
-            <p className="text-lg font-extrabold text-[#111111] tabular-nums">
+            <p className="text-base sm:text-lg font-extrabold text-[#111111] tabular-nums">
               {dashboardData.totalClicks}
             </p>
-            <p className="text-xs font-medium text-[#767676] mt-0.5">Cliques no WhatsApp</p>
-            <p className="text-[11px] text-[#767676] mt-1">
-              {dashboardData.totalSalesCount} venda(s) registrada(s)
+            <p className="text-[11px] sm:text-xs font-medium text-[#767676] mt-0.5 truncate">
+              Cliques WhatsApp
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 truncate">
+              {dashboardData.totalSalesCount} venda(s)
             </p>
           </Link>
 
           <Link
             to="/admin/produtos"
-            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-4 transition-all"
+            className="bg-white rounded-2xl border border-[#EAEAEA] hover:border-[#CCCCCC] p-3.5 sm:p-4 transition-all"
           >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
-                <Package size={16} />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F4F4F4] text-[#111111] flex items-center justify-center">
+                <Package size={15} />
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#767676]">
-                Catálogo
+                Vitrine
               </span>
             </div>
-            <p className="text-lg font-extrabold text-[#111111] tabular-nums">
+            <p className="text-base sm:text-lg font-extrabold text-[#111111] tabular-nums">
               {dashboardData.publishedCount}{' '}
               <span className="text-xs font-normal text-[#767676]">/ {products.length}</span>
             </p>
-            <p className="text-xs font-medium text-[#767676] mt-0.5">Itens Publicados</p>
-            <p className="text-[11px] text-[#767676] mt-1">
-              {dashboardData.featuredCount} em destaque na Home
+            <p className="text-[11px] sm:text-xs font-medium text-[#767676] mt-0.5 truncate">
+              Itens Publicados
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 truncate">
+              {dashboardData.featuredCount} em destaque
             </p>
           </Link>
 
           <Link
             to="/admin/estoque"
             className={cn(
-              'rounded-2xl border p-4 transition-all',
+              'rounded-2xl border p-3.5 sm:p-4 transition-all',
               dashboardData.lowStockCount + dashboardData.zeroStockCount > 0
                 ? 'bg-[#FFFBEB]/60 border-[#FDE68A] hover:border-[#F59E0B]'
                 : 'bg-white border-[#EAEAEA] hover:border-[#CCCCCC]'
             )}
           >
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#FFFBEB] text-[#92400E] flex items-center justify-center">
-                <AlertTriangle size={16} />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#FFFBEB] text-[#92400E] flex items-center justify-center">
+                <AlertTriangle size={15} />
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#92400E]">
                 Atenção
               </span>
             </div>
-            <p className="text-lg font-extrabold text-[#111111] tabular-nums">
+            <p className="text-base sm:text-lg font-extrabold text-[#111111] tabular-nums">
               {dashboardData.lowStockCount + dashboardData.zeroStockCount}
             </p>
-            <p className="text-xs font-medium text-[#767676] mt-0.5">Alertas de Reposição</p>
-            <p className="text-[11px] text-[#92400E] font-medium mt-1">
-              {dashboardData.zeroStockCount} esgotado(s) • {dashboardData.lowStockCount} baixo(s)
+            <p className="text-[11px] sm:text-xs font-medium text-[#767676] mt-0.5 truncate">
+              Alertas Estoque
+            </p>
+            <p className="text-[10px] sm:text-[11px] text-[#92400E] font-medium mt-1 truncate">
+              {dashboardData.zeroStockCount} zerado · {dashboardData.lowStockCount} baixo
             </p>
           </Link>
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-            3. PAINEL DE ANÁLISE GRÁFICA (PALETA EDITORIAL CARBONO & VERDE)
+            3. PAINEL DE ANÁLISE GRÁFICA (RESPONSIVO MOBILE-FIRST + DESKTOP)
            ══════════════════════════════════════════════════════════════════ */}
-        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-6">
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-[#F0F0F0]">
+        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 sm:p-6">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-5 border-b border-[#F0F0F0]">
             <div>
-              <h2 className="text-base font-bold text-[#111111]">
+              <h2 className="text-sm sm:text-base font-bold text-[#111111]">
                 Análise Financeira e de Estoque
               </h2>
               <p className="text-xs text-[#767676] mt-0.5">
-                Selecione o modo de visualização para acompanhar o desempenho por categoria, produto ou pagamento.
+                Toque nos modos abaixo para alternar a visualização.
               </p>
             </div>
 
-            {/* Seletor de Gráficos Sóbrio */}
-            <div className="flex flex-wrap items-center gap-1 bg-[#F4F4F4] p-1 rounded-xl">
+            {/* Seletor de Gráficos Deslizante no Mobile */}
+            <div className="flex items-center gap-1 bg-[#F4F4F4] p-1 rounded-xl overflow-x-auto max-w-full">
               {(
                 [
                   { id: 'columns', label: 'Colunas', icon: BarChart3 },
@@ -800,7 +812,7 @@ export function DashboardPage() {
                   type="button"
                   onClick={() => handleSelectChartMode(option.id)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
                     chartMode === option.id
                       ? 'bg-[#111111] text-white shadow-2xs'
                       : 'text-[#555555] hover:text-[#111111]'
@@ -813,20 +825,20 @@ export function DashboardPage() {
             </div>
           </div>
 
-          {/* MODELO 1: COLUNAS VERTICAIS AGRUPADAS */}
+          {/* MODELO 1: COLUNAS (BARRAS HORIZONTAIS NO MOBILE / COLUNAS VERTICAIS NO DESKTOP) */}
           {chartMode === 'columns' && (
-            <div className="pt-6 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="pt-4 sm:pt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
                 <div>
-                  <h3 className="text-sm font-bold text-[#111111]">
+                  <h3 className="text-xs sm:text-sm font-bold text-[#111111]">
                     Custo Investido vs. Valor de Venda vs. Lucro Projetado
                   </h3>
-                  <p className="text-xs text-[#767676]">
+                  <p className="text-[11px] sm:text-xs text-[#767676]">
                     Comparativo financeiro entre as categorias ativas do catálogo.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs font-medium text-[#555555]">
+                <div className="flex items-center gap-3 sm:gap-4 text-[11px] sm:text-xs font-medium text-[#555555]">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-xs bg-[#D4D4D8] inline-block" /> Custo
                   </span>
@@ -839,105 +851,195 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              <div className="relative pt-8 pb-2 px-2">
-                <div className="h-64 border-b border-l border-[#EAEAEA] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 items-end px-4 relative">
-                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                    {[1, 0.75, 0.5, 0.25, 0].map((ratio, idx) => (
-                      <div
-                        key={idx}
-                        className="w-full border-t border-dashed border-[#F2F2F2] flex items-center"
-                      >
-                        <span className="text-[10px] text-[#999999] bg-white pr-1 -mt-2.5 tabular-nums">
-                          {formatBRL(Math.round(dashboardData.maxCatSaleValue * ratio))}
-                        </span>
+              {/* VISÃO MOBILE (< 768px): Barras Horizontais Executivas — Zero Sobreposição */}
+              <div className="md:hidden space-y-2.5 pt-1">
+                {dashboardData.categoryBreakdown.map((cat) => {
+                  const salePct = Math.max(
+                    8,
+                    Math.round((cat.saleValue / dashboardData.maxCatSaleValue) * 100)
+                  )
+                  const costPct = Math.max(
+                    5,
+                    Math.round((cat.costValue / dashboardData.maxCatSaleValue) * 100)
+                  )
+                  const profitPct = Math.max(
+                    5,
+                    Math.round((cat.profitValue / dashboardData.maxCatSaleValue) * 100)
+                  )
+
+                  return (
+                    <div
+                      key={cat.id}
+                      className="p-3 rounded-xl border border-[#EAEAEA] bg-[#FAFAF8] space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#111111] truncate">{cat.name}</p>
+                          <p className="text-[10px] text-[#767676]">
+                            {cat.productCount} prod. · {cat.stockUnits} un. em estoque
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-extrabold text-[#111111] tabular-nums">
+                            {formatBRL(cat.saleValue)}
+                          </p>
+                          <p className="text-[10px] font-bold text-[#166534] tabular-nums">
+                            Lucro: +{formatBRL(cat.profitValue)}
+                          </p>
+                        </div>
                       </div>
+
+                      {/* 3 Barras Horizontais Proporcionais (Venda, Custo e Lucro) */}
+                      <div className="space-y-1">
+                        <div className="w-full h-2 bg-[#ECECEA] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#111111] rounded-full"
+                            style={{ width: `${salePct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex-1 h-1.5 bg-[#ECECEA] rounded-full overflow-hidden flex">
+                            <div
+                              className="h-full bg-[#D4D4D8]"
+                              style={{ width: `${costPct}%` }}
+                            />
+                            <div
+                              className="h-full bg-[#24A850]"
+                              style={{ width: `${profitPct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-[#767676] tabular-nums shrink-0">
+                            Custo: {formatBRL(cat.costValue)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* VISÃO DESKTOP (>= 768px): Colunas Verticais com Eixo Y Isolado */}
+              <div className="hidden md:block pt-6 pb-2">
+                <div className="flex items-stretch gap-3">
+                  {/* Coluna Eixo Y */}
+                  <div className="w-20 shrink-0 h-56 flex flex-col justify-between text-right pr-2 pb-6">
+                    {[1, 0.75, 0.5, 0.25, 0].map((ratio, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] text-[#999999] tabular-nums leading-none"
+                      >
+                        {formatBRL(Math.round(dashboardData.maxCatSaleValue * ratio))}
+                      </span>
                     ))}
                   </div>
 
-                  {dashboardData.categoryBreakdown.map((cat, idx) => {
-                    const costH = Math.max(
-                      6,
-                      Math.round((cat.costValue / dashboardData.maxCatSaleValue) * 100)
-                    )
-                    const saleH = Math.max(
-                      10,
-                      Math.round((cat.saleValue / dashboardData.maxCatSaleValue) * 100)
-                    )
-                    const profitH = Math.max(
-                      6,
-                      Math.round((cat.profitValue / dashboardData.maxCatSaleValue) * 100)
-                    )
-                    const isHovered = hoveredIndex === idx
-
-                    return (
-                      <div
-                        key={cat.id}
-                        onMouseEnter={() => setHoveredIndex(idx)}
-                        onMouseLeave={() => setHoveredIndex(null)}
-                        className="relative z-10 flex flex-col items-center h-full justify-end group cursor-pointer"
-                      >
-                        {isHovered && (
-                          <div className="absolute -top-16 z-30 bg-[#111111] text-white text-[11px] rounded-xl px-3 py-2 shadow-lg whitespace-nowrap pointer-events-none">
-                            <p className="font-bold text-white">{cat.name}</p>
-                            <p className="text-white/80">Venda: {formatBRL(cat.saleValue)}</p>
-                            <p className="text-white/80">Custo: {formatBRL(cat.costValue)}</p>
-                            <p className="font-semibold text-[#24A850]">
-                              Lucro: +{formatBRL(cat.profitValue)}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex items-end justify-center gap-1.5 w-full h-52 px-1">
-                          <div
-                            className="w-3 sm:w-3.5 bg-[#D4D4D8] rounded-t-sm transition-all duration-300"
-                            style={{ height: `${costH}%` }}
-                          />
-                          <div
-                            className="w-3 sm:w-3.5 bg-[#111111] rounded-t-sm transition-all duration-300"
-                            style={{ height: `${saleH}%` }}
-                          />
-                          <div
-                            className="w-3 sm:w-3.5 bg-[#24A850] rounded-t-sm transition-all duration-300"
-                            style={{ height: `${profitH}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 px-4 pt-3">
-                  {dashboardData.categoryBreakdown.map((cat) => (
-                    <div key={cat.id} className="text-center">
-                      <p className="text-xs font-semibold text-[#111111] truncate" title={cat.name}>
-                        {cat.name}
-                      </p>
-                      <p className="text-[10px] font-medium text-[#166534] tabular-nums">
-                        +{formatBRL(cat.profitValue)}
-                      </p>
+                  {/* Área de Plotagem das Colunas */}
+                  <div className="flex-1 relative">
+                    {/* Linhas de Grade Horizontais */}
+                    <div className="absolute inset-x-0 top-0 h-50 flex flex-col justify-between pointer-events-none">
+                      {[1, 0.75, 0.5, 0.25, 0].map((_, idx) => (
+                        <div
+                          key={idx}
+                          className="w-full border-t border-dashed border-[#EEEEEE]"
+                        />
+                      ))}
                     </div>
-                  ))}
+
+                    {/* Colunas + Rótulos Integrados */}
+                    <div
+                      className="relative z-10 grid gap-3 items-end"
+                      style={{
+                        gridTemplateColumns: `repeat(${Math.max(
+                          1,
+                          dashboardData.categoryBreakdown.length
+                        )}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {dashboardData.categoryBreakdown.map((cat, idx) => {
+                        const costH = Math.max(
+                          6,
+                          Math.round((cat.costValue / dashboardData.maxCatSaleValue) * 100)
+                        )
+                        const saleH = Math.max(
+                          10,
+                          Math.round((cat.saleValue / dashboardData.maxCatSaleValue) * 100)
+                        )
+                        const profitH = Math.max(
+                          6,
+                          Math.round((cat.profitValue / dashboardData.maxCatSaleValue) * 100)
+                        )
+                        const isHovered = hoveredIndex === idx
+
+                        return (
+                          <div
+                            key={cat.id}
+                            onMouseEnter={() => setHoveredIndex(idx)}
+                            onMouseLeave={() => setHoveredIndex(null)}
+                            className="relative flex flex-col items-center group cursor-pointer"
+                          >
+                            {isHovered && (
+                              <div className="absolute -top-18 z-30 bg-[#111111] text-white text-[11px] rounded-xl px-3 py-2 shadow-lg whitespace-nowrap pointer-events-none">
+                                <p className="font-bold text-white">{cat.name}</p>
+                                <p className="text-white/80">Venda: {formatBRL(cat.saleValue)}</p>
+                                <p className="text-white/80">Custo: {formatBRL(cat.costValue)}</p>
+                                <p className="font-semibold text-[#24A850]">
+                                  Lucro: +{formatBRL(cat.profitValue)}
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="flex items-end justify-center gap-1.5 w-full h-50 px-1 border-b border-[#EAEAEA]">
+                              <div
+                                className="w-3 bg-[#D4D4D8] rounded-t-xs transition-all duration-300"
+                                style={{ height: `${costH}%` }}
+                              />
+                              <div
+                                className="w-3 bg-[#111111] rounded-t-xs transition-all duration-300"
+                                style={{ height: `${saleH}%` }}
+                              />
+                              <div
+                                className="w-3 bg-[#24A850] rounded-t-xs transition-all duration-300"
+                                style={{ height: `${profitH}%` }}
+                              />
+                            </div>
+
+                            <div className="w-full text-center pt-2.5 px-0.5">
+                              <p
+                                className="text-[11px] font-semibold text-[#111111] truncate"
+                                title={cat.name}
+                              >
+                                {cat.name}
+                              </p>
+                              <p className="text-[10px] font-semibold text-[#166534] tabular-nums">
+                                +{formatBRL(cat.profitValue)}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* MODELO 2: GRÁFICO DE ÁREA COM CURVA SUAVE */}
+          {/* MODELO 2: GRÁFICO DE ÁREA COM CURVA SUAVE (OTIMIZADO MOBILE & DESKTOP) */}
           {chartMode === 'area' && (
-            <div className="pt-6 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="pt-4 sm:pt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
                 <div>
-                  <h3 className="text-sm font-bold text-[#111111]">
+                  <h3 className="text-xs sm:text-sm font-bold text-[#111111]">
                     {dashboardData.hasRealDailySales
                       ? 'Evolução Diária (Últimos 7 Dias: Receita vs. Lucro)'
                       : 'Curva de Receita e Lucro Projetado por Produto'}
                   </h3>
-                  <p className="text-xs text-[#767676]">
+                  <p className="text-[11px] sm:text-xs text-[#767676]">
                     Comparativo entre o valor bruto de venda e a margem líquida.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs font-medium text-[#555555]">
+                <div className="flex items-center gap-4 text-[11px] sm:text-xs font-medium text-[#555555]">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#111111] inline-block" /> Receita Bruta
                   </span>
@@ -947,123 +1049,154 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              <div className="w-full overflow-x-auto">
-                <div className="min-w-[580px]">
-                  <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-64 overflow-visible">
-                    <defs>
-                      <linearGradient id="alfaCarbonGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#111111" stopOpacity="0.12" />
-                        <stop offset="100%" stopColor="#111111" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
+              {/* Curva SVG Responsiva (Toque ou Mouse) */}
+              <div className="w-full bg-[#FAFAF8] sm:bg-transparent rounded-xl p-2 sm:p-0 border border-[#EAEAEA] sm:border-0">
+                <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-44 sm:h-64 overflow-visible">
+                  <defs>
+                    <linearGradient id="alfaCarbonGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#111111" stopOpacity="0.12" />
+                      <stop offset="100%" stopColor="#111111" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
 
-                    {[0, 0.25, 0.5, 0.75, 1].map((r, i) => {
-                      const y = padY + plotH * r
-                      const val = Math.round(maxAreaVal * (1 - r))
-                      return (
-                        <g key={i}>
-                          <line
-                            x1={padX}
-                            y1={y}
-                            x2={svgW - padX}
-                            y2={y}
-                            stroke="#F2F2F2"
-                            strokeDasharray="4 4"
+                  {[0, 0.25, 0.5, 0.75, 1].map((r, i) => {
+                    const y = padY + plotH * r
+                    const val = Math.round(maxAreaVal * (1 - r))
+                    return (
+                      <g key={i}>
+                        <line
+                          x1={padX}
+                          y1={y}
+                          x2={svgW - padX}
+                          y2={y}
+                          stroke="#E5E5E5"
+                          strokeDasharray="4 4"
+                        />
+                        <text x={2} y={y + 3} className="fill-[#767676] text-[10px]">
+                          {formatBRL(val)}
+                        </text>
+                      </g>
+                    )
+                  })}
+
+                  {primaryAreaPath && <path d={primaryAreaPath} fill="url(#alfaCarbonGrad)" />}
+
+                  {secondaryLinePath && (
+                    <path
+                      d={secondaryLinePath}
+                      fill="none"
+                      stroke="#24A850"
+                      strokeWidth="2.5"
+                      strokeDasharray="5 5"
+                    />
+                  )}
+
+                  {primaryLinePath && (
+                    <path
+                      d={primaryLinePath}
+                      fill="none"
+                      stroke="#111111"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  )}
+
+                  {primaryCoords.map((pt, idx) => (
+                    <g
+                      key={idx}
+                      onClick={() => setHoveredIndex(hoveredIndex === idx ? null : idx)}
+                      onMouseEnter={() => setHoveredIndex(idx)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                      className="cursor-pointer"
+                    >
+                      <circle
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={hoveredIndex === idx ? 7 : 5}
+                        fill="#FFFFFF"
+                        stroke="#111111"
+                        strokeWidth="2.5"
+                      />
+                      <text
+                        x={pt.x}
+                        y={svgH - 4}
+                        textAnchor="middle"
+                        className="fill-[#555555] text-[9px] sm:text-[10px] font-medium hidden sm:block"
+                      >
+                        {pt.label}
+                      </text>
+                      {hoveredIndex === idx && (
+                        <g>
+                          <rect
+                            x={Math.min(svgW - 155, Math.max(10, pt.x - 70))}
+                            y={Math.max(4, pt.y - 54)}
+                            width="140"
+                            height="44"
+                            rx="8"
+                            fill="#111111"
                           />
-                          <text x={4} y={y + 3} className="fill-[#999999] text-[9px]">
-                            {formatBRL(val)}
+                          <text
+                            x={Math.min(svgW - 85, Math.max(80, pt.x))}
+                            y={Math.max(20, pt.y - 36)}
+                            textAnchor="middle"
+                            className="fill-white text-[10px] font-bold"
+                          >
+                            Venda: {formatBRL(pt.primaryVal)}
+                          </text>
+                          <text
+                            x={Math.min(svgW - 85, Math.max(80, pt.x))}
+                            y={Math.max(36, pt.y - 20)}
+                            textAnchor="middle"
+                            className="fill-[#24A850] text-[10px] font-semibold"
+                          >
+                            Lucro: +{formatBRL(pt.secondaryVal)}
                           </text>
                         </g>
-                      )
-                    })}
+                      )}
+                    </g>
+                  ))}
+                </svg>
+              </div>
 
-                    {primaryAreaPath && <path d={primaryAreaPath} fill="url(#alfaCarbonGrad)" />}
-
-                    {secondaryLinePath && (
-                      <path
-                        d={secondaryLinePath}
-                        fill="none"
-                        stroke="#24A850"
-                        strokeWidth="2.5"
-                        strokeDasharray="5 5"
-                      />
+              {/* Lista Resumo de Pontos no Mobile (Para leitura perfeita sem cortar textos do eixo X) */}
+              <div className="sm:hidden space-y-2">
+                {areaPoints.map((pt, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setHoveredIndex(idx)}
+                    className={cn(
+                      'flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors',
+                      hoveredIndex === idx
+                        ? 'bg-[#111111] text-white border-[#111111]'
+                        : 'bg-[#FAFAF8] text-[#111111] border-[#EAEAEA]'
                     )}
-
-                    {primaryLinePath && (
-                      <path
-                        d={primaryLinePath}
-                        fill="none"
-                        stroke="#111111"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                      />
-                    )}
-
-                    {primaryCoords.map((pt, idx) => (
-                      <g
-                        key={idx}
-                        onMouseEnter={() => setHoveredIndex(idx)}
-                        onMouseLeave={() => setHoveredIndex(null)}
-                        className="cursor-pointer"
-                      >
-                        <circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r={hoveredIndex === idx ? 6 : 4.5}
-                          fill="#FFFFFF"
-                          stroke="#111111"
-                          strokeWidth="2.5"
-                        />
-                        <text
-                          x={pt.x}
-                          y={svgH - 4}
-                          textAnchor="middle"
-                          className="fill-[#555555] text-[10px] font-medium"
-                        >
-                          {pt.label}
-                        </text>
-                        {hoveredIndex === idx && (
-                          <g>
-                            <rect
-                              x={Math.min(svgW - 155, Math.max(10, pt.x - 70))}
-                              y={Math.max(4, pt.y - 54)}
-                              width="140"
-                              height="44"
-                              rx="8"
-                              fill="#111111"
-                            />
-                            <text
-                              x={Math.min(svgW - 85, Math.max(80, pt.x))}
-                              y={Math.max(20, pt.y - 36)}
-                              textAnchor="middle"
-                              className="fill-white text-[10px] font-bold"
-                            >
-                              Venda: {formatBRL(pt.primaryVal)}
-                            </text>
-                            <text
-                              x={Math.min(svgW - 85, Math.max(80, pt.x))}
-                              y={Math.max(36, pt.y - 20)}
-                              textAnchor="middle"
-                              className="fill-[#24A850] text-[10px] font-semibold"
-                            >
-                              Lucro: +{formatBRL(pt.secondaryVal)}
-                            </text>
-                          </g>
+                  >
+                    <span className="font-semibold truncate pr-2">
+                      {idx + 1}. {pt.label}
+                    </span>
+                    <div className="flex items-center gap-3 shrink-0 tabular-nums">
+                      <span>{formatBRL(pt.primaryVal)}</span>
+                      <span
+                        className={cn(
+                          'font-bold',
+                          hoveredIndex === idx ? 'text-[#24A850]' : 'text-[#166534]'
                         )}
-                      </g>
-                    ))}
-                  </svg>
-                </div>
+                      >
+                        +{formatBRL(pt.secondaryVal)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* MODELO 3: GRÁFICO DE ROSCA EDITORIAL */}
+          {/* MODELO 3: GRÁFICO DE ROSCA EDITORIAL (COM TOQUE NO MOBILE) */}
           {chartMode === 'donut' && (
-            <div className="pt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="pt-4 sm:pt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
               <div className="lg:col-span-5 flex flex-col items-center justify-center">
-                <div className="relative w-56 h-56 flex items-center justify-center">
-                  <svg className="w-56 h-56 -rotate-90" viewBox="0 0 180 180">
+                <div className="relative w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center">
+                  <svg className="w-48 h-48 sm:w-56 sm:h-56 -rotate-90" viewBox="0 0 180 180">
                     <circle
                       cx="90"
                       cy="90"
@@ -1083,6 +1216,7 @@ export function DashboardPage() {
                         strokeWidth={hoveredIndex === idx ? '26' : '22'}
                         strokeDasharray={seg.strokeDasharray}
                         strokeDashoffset={seg.strokeDashoffset}
+                        onClick={() => setHoveredIndex(hoveredIndex === idx ? null : idx)}
                         onMouseEnter={() => setHoveredIndex(idx)}
                         onMouseLeave={() => setHoveredIndex(null)}
                         className="transition-all duration-300 cursor-pointer"
@@ -1090,12 +1224,12 @@ export function DashboardPage() {
                     ))}
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 pointer-events-none">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#767676]">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#767676] truncate max-w-[110px]">
                       {hoveredIndex !== null && donutSegments[hoveredIndex]
                         ? donutSegments[hoveredIndex].name
                         : 'Total em Estoque'}
                     </span>
-                    <span className="text-base font-extrabold text-[#111111] tabular-nums mt-0.5">
+                    <span className="text-sm sm:text-base font-extrabold text-[#111111] tabular-nums mt-0.5">
                       {hoveredIndex !== null && donutSegments[hoveredIndex]
                         ? formatBRL(donutSegments[hoveredIndex].saleValue)
                         : formatBRL(dashboardData.totalSalePotential)}
@@ -1109,14 +1243,15 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                 {donutSegments.map((seg, idx) => (
                   <div
                     key={seg.id}
+                    onClick={() => setHoveredIndex(hoveredIndex === idx ? null : idx)}
                     onMouseEnter={() => setHoveredIndex(idx)}
                     onMouseLeave={() => setHoveredIndex(null)}
                     className={cn(
-                      'p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between',
+                      'p-3 sm:p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between',
                       hoveredIndex === idx
                         ? 'border-[#111111] bg-[#FAFAF8]'
                         : 'border-[#EAEAEA] bg-white hover:border-[#CCCCCC]'
@@ -1130,7 +1265,7 @@ export function DashboardPage() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[#111111] truncate">{seg.name}</p>
                         <p className="text-[11px] text-[#767676]">
-                          {seg.productCount} prod. • {seg.stockUnits} un.
+                          {seg.productCount} prod. · {seg.stockUnits} un.
                         </p>
                         <p className="text-[11px] font-semibold text-[#166534] tabular-nums">
                           Lucro: +{formatBRL(seg.profitValue)}

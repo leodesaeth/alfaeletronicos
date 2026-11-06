@@ -657,9 +657,9 @@ export function FinancialPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Seletor de Período */}
-          <div className="inline-flex items-center bg-[#F4F4F4] border border-[#E5E5E5] rounded-xl p-1">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+          {/* Seletor de Período (Deslizante no Mobile) */}
+          <div className="flex items-center bg-[#F4F4F4] border border-[#E5E5E5] rounded-xl p-1 overflow-x-auto max-w-full">
             {(
               [
                 { id: 'today', label: 'Hoje' },
@@ -674,7 +674,7 @@ export function FinancialPage() {
                 type="button"
                 onClick={() => setPeriod(p.id)}
                 className={cn(
-                  'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                  'px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0',
                   period === p.id
                     ? 'bg-white text-[#111111] shadow-2xs'
                     : 'text-[#767676] hover:text-[#111111]'
@@ -685,29 +685,31 @@ export function FinancialPage() {
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={openPdvModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#111111] hover:bg-[#242424] text-white text-xs font-semibold transition-colors"
-          >
-            <Plus size={15} /> Lançar Venda / Serviço (PDV)
-          </button>
+          <div className="grid grid-cols-2 sm:flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openPdvModal}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#111111] hover:bg-[#242424] text-white text-xs font-semibold transition-colors"
+            >
+              <Plus size={15} /> Lançar Venda (PDV)
+            </button>
 
-          <button
-            type="button"
-            onClick={handleExportFinancialCSV}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-[#E0E0E0] bg-white hover:bg-[#F7F7F7] text-xs font-semibold text-[#242424] transition-colors"
-          >
-            <Download size={14} /> Exportar DRE (Excel)
-          </button>
+            <button
+              type="button"
+              onClick={handleExportFinancialCSV}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl border border-[#E0E0E0] bg-white hover:bg-[#F7F7F7] text-xs font-semibold text-[#242424] transition-colors"
+            >
+              <Download size={14} /> Exportar DRE
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ── Barra de Meta de Faturamento Mensal (Sóbria Editorial) ── */}
-      <div className="bg-white rounded-2xl border border-[#EAEAEA] p-5 shadow-card">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+      <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 sm:p-5 shadow-card">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#F4F4F4] border border-[#E5E5E5] flex items-center justify-center text-[#111111]">
+            <div className="w-10 h-10 rounded-xl bg-[#F4F4F4] border border-[#E5E5E5] flex items-center justify-center text-[#111111] shrink-0">
               <Target size={18} />
             </div>
             <div>
@@ -723,27 +725,27 @@ export function FinancialPage() {
                   Editar meta
                 </button>
               </div>
-              <p className="text-lg font-extrabold text-[#111111] tabular-nums mt-0.5">
+              <p className="text-base sm:text-lg font-extrabold text-[#111111] tabular-nums mt-0.5">
                 {formatBRL(summary.currentMonthRevenue)}{' '}
-                <span className="text-sm font-normal text-[#767676]">
+                <span className="text-xs sm:text-sm font-normal text-[#767676]">
                   de {formatBRL(summary.goal)} ({summary.goalProgressPct}%)
                 </span>
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <div className="bg-[#FAFAF8] border border-[#EAEAEA] rounded-xl px-3.5 py-2">
-              <span className="text-[#767676] block">Falta para bater a meta</span>
-              <strong className="text-[#111111] font-bold tabular-nums text-sm">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-3 text-xs">
+            <div className="bg-[#FAFAF8] border border-[#EAEAEA] rounded-xl px-3 py-2">
+              <span className="text-[#767676] block text-[11px]">Falta p/ meta</span>
+              <strong className="text-[#111111] font-bold tabular-nums text-xs sm:text-sm">
                 {summary.remainingToGoal > 0 ? formatBRL(summary.remainingToGoal) : 'Meta Atingida'}
               </strong>
             </div>
             {summary.remainingToGoal > 0 && (
-              <div className="bg-[#FAFAF8] border border-[#EAEAEA] rounded-xl px-3.5 py-2">
-                <span className="text-[#767676] block">Ritmo necessário por dia</span>
-                <strong className="text-[#111111] font-bold tabular-nums text-sm">
-                  {formatBRL(summary.dailyTargetNeeded)} / dia
+              <div className="bg-[#FAFAF8] border border-[#EAEAEA] rounded-xl px-3 py-2">
+                <span className="text-[#767676] block text-[11px]">Ritmo por dia</span>
+                <strong className="text-[#111111] font-bold tabular-nums text-xs sm:text-sm">
+                  {formatBRL(summary.dailyTargetNeeded)}/dia
                 </strong>
               </div>
             )}
@@ -758,116 +760,111 @@ export function FinancialPage() {
         </div>
       </div>
 
-      {/* ── 4 Cartões Executivos Principais ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 shadow-card">
+      {/* ── 4 Cartões Executivos Principais (Grade 2x2 no Mobile) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-3.5 sm:p-4 shadow-card">
           <div className="flex items-center justify-between text-[#767676] mb-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
               Faturamento Bruto
             </span>
-            <TrendingUp size={15} className="text-[#767676]" />
+            <TrendingUp size={14} className="text-[#767676] shrink-0" />
           </div>
-          <p className="text-2xl font-extrabold text-[#111111] tabular-nums">
+          <p className="text-base sm:text-2xl font-extrabold text-[#111111] tabular-nums truncate">
             {formatBRL(summary.totalGrossRevenue)}
           </p>
-          <p className="text-[11px] text-[#767676] mt-1">
-            Produtos: {formatBRL(summary.productGrossRevenue)} · Serviços: {formatBRL(summary.extraGrossRevenue)}
+          <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 truncate">
+            Prod: {formatBRL(summary.productGrossRevenue)}
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 shadow-card">
+        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-3.5 sm:p-4 shadow-card">
           <div className="flex items-center justify-between text-[#767676] mb-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">
-              Lucro Bruto (Após CMV e Taxas)
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
+              Lucro Bruto
             </span>
-            <Wallet size={15} className="text-[#767676]" />
+            <Wallet size={14} className="text-[#767676] shrink-0" />
           </div>
-          <p className="text-2xl font-extrabold text-[#111111] tabular-nums">
+          <p className="text-base sm:text-2xl font-extrabold text-[#111111] tabular-nums truncate">
             {formatBRL(summary.grossProfit)}
           </p>
-          <p className="text-[11px] text-[#767676] mt-1">
-            CMV: {formatBRL(summary.totalDirectCosts)} · Taxas: {formatBRL(summary.totalCardFees)}
+          <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 truncate">
+            CMV: {formatBRL(summary.totalDirectCosts)}
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 shadow-card">
+        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-3.5 sm:p-4 shadow-card">
           <div className="flex items-center justify-between text-[#767676] mb-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">
-              Despesas Pagas & Perdas
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
+              Despesas & Perdas
             </span>
-            <TrendingDown size={15} className="text-[#767676]" />
+            <TrendingDown size={14} className="text-[#767676] shrink-0" />
           </div>
-          <p className="text-2xl font-extrabold text-[#111111] tabular-nums">
+          <p className="text-base sm:text-2xl font-extrabold text-[#111111] tabular-nums truncate">
             {formatBRL(summary.paidExpensesTotal + summary.totalWarrantyAndLosses)}
           </p>
-          <p className="text-[11px] text-[#767676] mt-1">
+          <p className="text-[10px] sm:text-[11px] text-[#767676] mt-1 truncate">
             {summary.pendingExpensesTotal > 0 ? (
               <span className="text-[#92400E] font-semibold">
-                + {formatBRL(summary.pendingExpensesTotal)} em contas a pagar
+                +{formatBRL(summary.pendingExpensesTotal)} a pagar
               </span>
             ) : (
-              'Todas as contas do período estão em dia'
+              'Contas em dia'
             )}
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-4 shadow-card">
+        <div className="bg-white rounded-2xl border border-[#EAEAEA] p-3.5 sm:p-4 shadow-card">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#767676]">
-              Lucro Líquido Real (Caixa)
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#767676] truncate">
+              Lucro Líquido Real
             </span>
             <DollarSign
-              size={15}
-              className={summary.netRealProfit >= 0 ? 'text-[#166534]' : 'text-[#991B1B]'}
+              size={14}
+              className={summary.netRealProfit >= 0 ? 'text-[#166534] shrink-0' : 'text-[#991B1B] shrink-0'}
             />
           </div>
           <p
             className={cn(
-              'text-2xl font-extrabold tabular-nums',
+              'text-base sm:text-2xl font-extrabold tabular-nums truncate',
               summary.netRealProfit >= 0 ? 'text-[#166534]' : 'text-[#991B1B]'
             )}
           >
             {formatBRL(summary.netRealProfit)}
           </p>
-          <div className="flex items-center justify-between text-[11px] mt-1 text-[#767676]">
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] mt-1 text-[#767676] truncate">
             <span>
-              Margem Líquida: <strong className="text-[#111111]">{summary.netMarginPct}%</strong>
+              Margem: <strong className="text-[#111111]">{summary.netMarginPct}%</strong>
             </span>
-            {summary.pendingReceivablesTotal > 0 && (
-              <span className="text-[#242424] font-semibold">
-                + {formatBRL(summary.pendingReceivablesTotal)} a receber
-              </span>
-            )}
           </div>
         </div>
       </div>
 
-      {/* ── Navegação das 4 Abas do Financeiro ── */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#EAEAEA] pb-3">
+      {/* ── Navegação das 4 Abas do Financeiro (Deslizante no Mobile) ── */}
+      <div className="flex items-center gap-2 border-b border-[#EAEAEA] pb-3 overflow-x-auto max-w-full">
         <button
           type="button"
           onClick={() => setActiveTab('dre')}
           className={cn(
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
+            'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0',
             activeTab === 'dre'
               ? 'bg-[#111111] text-white'
               : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
           )}
         >
-          <Receipt size={14} /> DRE & Fluxo de Caixa
+          <Receipt size={14} /> DRE & Caixa
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('payables')}
           className={cn(
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
+            'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0',
             activeTab === 'payables'
               ? 'bg-[#111111] text-white'
               : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
           )}
         >
-          <CreditCard size={14} /> Contas a Pagar & Despesas
+          <CreditCard size={14} /> Contas a Pagar
           {summary.overduePayablesCount > 0 && (
             <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-[#FEF2F2] text-[#991B1B]">
               {summary.overduePayablesCount}
@@ -879,13 +876,13 @@ export function FinancialPage() {
           type="button"
           onClick={() => setActiveTab('receivables')}
           className={cn(
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
+            'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0',
             activeTab === 'receivables'
               ? 'bg-[#111111] text-white'
               : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
           )}
         >
-          <Users size={14} /> Contas a Receber (Fiado)
+          <Users size={14} /> A Receber (Fiado)
           {receivables.filter((r) => r.status === 'pending').length > 0 && (
             <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-[#F4F4F4] text-[#111111]">
               {receivables.filter((r) => r.status === 'pending').length}
@@ -897,13 +894,13 @@ export function FinancialPage() {
           type="button"
           onClick={() => setActiveTab('settings')}
           className={cn(
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
+            'inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0',
             activeTab === 'settings'
               ? 'bg-[#111111] text-white'
               : 'bg-white text-[#555555] hover:text-[#111111] border border-[#EAEAEA]'
           )}
         >
-          <Settings2 size={14} /> Taxas de Maquininha & Meta
+          <Settings2 size={14} /> Taxas & Meta
         </button>
       </div>
 
