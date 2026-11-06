@@ -35,5 +35,8 @@ pnpm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
+# Scratch & Dev Tests
+scratch/
+
 # Vite
 .vite/

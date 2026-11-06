@@ -160,10 +160,10 @@ export function DashboardPage() {
 
     for (const p of products) {
       const m = metaMap[p.id] || {}
-      const stock = m.stock_quantity ?? 10
+      const stock = typeof m.stock_quantity === 'number' ? m.stock_quantity : (p.availability === 'unavailable' ? 0 : 0)
       const lowThreshold = m.low_stock_threshold ?? 2
       const price = p.price || 0
-      const cost = m.cost_price && m.cost_price > 0 ? m.cost_price : Math.round(price * 0.58)
+      const cost = m.cost_price && m.cost_price > 0 ? m.cost_price : Math.round(price * 0.65)
       const clicks = m.whatsapp_clicks || 0
       const sold = m.total_units_sold || 0
 

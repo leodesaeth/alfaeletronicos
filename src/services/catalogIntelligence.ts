@@ -132,21 +132,63 @@ export async function getAllProductMeta(): Promise<ProductMetaMap> {
     return localData
   }
 
+  let remoteData: ProductMetaMap = {}
   try {
     const { data, error } = await supabase.storage.from(BUCKET).download(META_PATH)
     if (!error && data) {
       const text = await data.text()
-      const remoteData = JSON.parse(text) as ProductMetaMap
-      memoryMetaCache = { ...localData, ...remoteData }
-      localStorage.setItem(LOCAL_META_KEY, JSON.stringify(memoryMetaCache))
-      return memoryMetaCache
+      remoteData = JSON.parse(text) as ProductMetaMap
     }
   } catch {
     // Arquivo ainda não existe no bucket, usa local
   }
 
-  memoryMetaCache = localData
-  return localData
+  // Tenta enriquecer com colunas relacionais da tabela products se existirem
+  try {
+    const { data: dbProds, error: pErr } = await supabase
+      .from('products')
+      .select('id, stock_quantity, low_stock_threshold, cost_price, compare_at_price, supplier, whatsapp_clicks, last_clicked_at, variations')
+
+    if (!pErr && dbProds && dbProds.length > 0) {
+      for (const p of dbProds) {
+        if (!remoteData[p.id]) remoteData[p.id] = {}
+        if (p.stock_quantity !== null && p.stock_quantity !== undefined) {
+          remoteData[p.id].stock_quantity = p.stock_quantity
+        }
+        if (p.low_stock_threshold !== null && p.low_stock_threshold !== undefined) {
+          remoteData[p.id].low_stock_threshold = p.low_stock_threshold
+        }
+        if (p.cost_price !== null && p.cost_price !== undefined) {
+          remoteData[p.id].cost_price = Number(p.cost_price)
+        }
+        if (p.compare_at_price !== null && p.compare_at_price !== undefined) {
+          remoteData[p.id].compare_at_price = Number(p.compare_at_price)
+        }
+        if (p.supplier) {
+          remoteData[p.id].supplier = p.supplier
+        }
+        if (p.whatsapp_clicks !== null && p.whatsapp_clicks !== undefined) {
+          remoteData[p.id].whatsapp_clicks = p.whatsapp_clicks
+        }
+        if (p.last_clicked_at) {
+          remoteData[p.id].last_clicked_at = p.last_clicked_at
+        }
+        if (p.variations && Array.isArray(p.variations)) {
+          remoteData[p.id].variations = p.variations
+        }
+      }
+    }
+  } catch {
+    // colunas ainda não migradas, mantém remoteData do storage
+  }
+
+  memoryMetaCache = { ...localData, ...remoteData }
+  try {
+    localStorage.setItem(LOCAL_META_KEY, JSON.stringify(memoryMetaCache))
+  } catch {
+    // ignore
+  }
+  return memoryMetaCache
 }
 
 export async function saveAllProductMeta(map: ProductMetaMap): Promise<void> {
@@ -182,6 +224,28 @@ export async function updateProductMeta(
   }
   const nextMap = { ...all, [productId]: updated }
   await saveAllProductMeta(nextMap)
+
+  // Persiste também diretamente nas colunas da tabela products quando disponível
+  if (isSupabaseConfigured) {
+    const dbPatch: Record<string, unknown> = {}
+    if (patch.stock_quantity !== undefined) dbPatch.stock_quantity = patch.stock_quantity
+    if (patch.low_stock_threshold !== undefined) dbPatch.low_stock_threshold = patch.low_stock_threshold
+    if (patch.cost_price !== undefined) dbPatch.cost_price = patch.cost_price
+    if (patch.compare_at_price !== undefined) dbPatch.compare_at_price = patch.compare_at_price
+    if (patch.supplier !== undefined) dbPatch.supplier = patch.supplier
+    if (patch.whatsapp_clicks !== undefined) dbPatch.whatsapp_clicks = patch.whatsapp_clicks
+    if (patch.last_clicked_at !== undefined) dbPatch.last_clicked_at = patch.last_clicked_at
+    if (patch.variations !== undefined) dbPatch.variations = patch.variations
+
+    if (Object.keys(dbPatch).length > 0) {
+      try {
+        await supabase.from('products').update(dbPatch).eq('id', productId)
+      } catch {
+        // ignora se colunas ainda não existem
+      }
+    }
+  }
+
   return updated
 }
 
@@ -215,6 +279,23 @@ export async function getStockMovements(): Promise<StockMovement[]> {
   if (!isSupabaseConfigured) {
     memoryMovementsCache = localList
     return localList
+  }
+
+  // Tenta carregar da tabela relacional pública
+  try {
+    const { data: dbRows, error: dbError } = await supabase
+      .from('stock_movements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(300)
+
+    if (!dbError && dbRows && dbRows.length > 0) {
+      memoryMovementsCache = dbRows as StockMovement[]
+      localStorage.setItem(LOCAL_MOVEMENTS_KEY, JSON.stringify(dbRows))
+      return memoryMovementsCache
+    }
+  } catch {
+    // segue para fallback do storage
   }
 
   try {
@@ -265,8 +346,8 @@ export async function registerStockMovement(params: {
     (params.type === 'in'
       ? 'restock'
       : params.type === 'out'
-      ? 'sale'
-      : 'adjustment')
+        ? 'sale'
+        : 'adjustment')
 
   const unitCost =
     params.unitCost !== undefined && params.unitCost > 0
@@ -370,6 +451,29 @@ export async function registerStockMovement(params: {
   }
 
   if (isSupabaseConfigured) {
+    // 1. Tenta gravar na tabela relacional de histórico
+    try {
+      await supabase.from('stock_movements').insert({
+        product_id: params.productId,
+        product_name: params.productName,
+        type: params.type,
+        reason: effectiveReason,
+        payment_method: params.paymentMethod || null,
+        quantity: qty,
+        previous_stock: previousStock,
+        new_stock: newStock,
+        unit_price: unitPrice,
+        unit_cost: unitCost,
+        total_value: totalValue,
+        profit_value: profitValue,
+        supplier: params.supplier || null,
+        note: params.note?.trim() || reasonLabels[effectiveReason],
+      })
+    } catch {
+      // ignora se tabela ainda não existe
+    }
+
+    // 2. Grava também no snapshot JSON para compatibilidade imediata
     try {
       const blob = new Blob([JSON.stringify(nextMovements)], {
         type: 'application/json',
@@ -401,6 +505,22 @@ export async function getStoreExpenses(): Promise<StoreExpense[]> {
   if (!isSupabaseConfigured) {
     memoryExpensesCache = localList
     return localList
+  }
+
+  // Tenta carregar da tabela store_expenses
+  try {
+    const { data: dbRows, error: dbError } = await supabase
+      .from('store_expenses')
+      .select('*')
+      .order('date', { ascending: false })
+
+    if (!dbError && dbRows && dbRows.length > 0) {
+      memoryExpensesCache = dbRows as StoreExpense[]
+      localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(dbRows))
+      return memoryExpensesCache
+    }
+  } catch {
+    // fallback para storage
   }
 
   try {
@@ -451,6 +571,19 @@ export async function addStoreExpense(params: {
 
   if (isSupabaseConfigured) {
     try {
+      await supabase.from('store_expenses').insert({
+        description: newItem.description,
+        category: newItem.category,
+        amount: newItem.amount,
+        date: newItem.date,
+        due_date: newItem.due_date || null,
+        status: newItem.status,
+      })
+    } catch {
+      // ignora se tabela ainda não existe
+    }
+
+    try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(EXPENSES_PATH, blob, {
         upsert: true,
@@ -469,9 +602,9 @@ export async function toggleStoreExpenseStatus(id: string): Promise<StoreExpense
   const next = current.map((item) =>
     item.id === id
       ? {
-          ...item,
-          status: (item.status === 'pending' ? 'paid' : 'pending') as 'paid' | 'pending',
-        }
+        ...item,
+        status: (item.status === 'pending' ? 'paid' : 'pending') as 'paid' | 'pending',
+      }
       : item
   )
   memoryExpensesCache = next
@@ -483,6 +616,18 @@ export async function toggleStoreExpenseStatus(id: string): Promise<StoreExpense
   }
 
   if (isSupabaseConfigured) {
+    const updatedItem = next.find((i) => i.id === id)
+    if (updatedItem) {
+      try {
+        await supabase
+          .from('store_expenses')
+          .update({ status: updatedItem.status })
+          .eq('id', id)
+      } catch {
+        // ignore
+      }
+    }
+
     try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(EXPENSES_PATH, blob, {
@@ -509,6 +654,12 @@ export async function deleteStoreExpense(id: string): Promise<StoreExpense[]> {
   }
 
   if (isSupabaseConfigured) {
+    try {
+      await supabase.from('store_expenses').delete().eq('id', id)
+    } catch {
+      // ignore
+    }
+
     try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(EXPENSES_PATH, blob, {
@@ -538,6 +689,22 @@ export async function getCustomerReceivables(): Promise<CustomerReceivable[]> {
   if (!isSupabaseConfigured) {
     memoryReceivablesCache = localList
     return localList
+  }
+
+  // Tenta carregar da tabela customer_receivables
+  try {
+    const { data: dbRows, error: dbError } = await supabase
+      .from('customer_receivables')
+      .select('*')
+      .order('due_date', { ascending: true })
+
+    if (!dbError && dbRows && dbRows.length > 0) {
+      memoryReceivablesCache = dbRows as CustomerReceivable[]
+      localStorage.setItem(LOCAL_RECEIVABLES_KEY, JSON.stringify(dbRows))
+      return memoryReceivablesCache
+    }
+  } catch {
+    // fallback para storage
   }
 
   try {
@@ -591,6 +758,19 @@ export async function addCustomerReceivable(params: {
 
   if (isSupabaseConfigured) {
     try {
+      await supabase.from('customer_receivables').insert({
+        customer_name: newItem.customer_name,
+        customer_phone: newItem.customer_phone || null,
+        description: newItem.description,
+        amount: newItem.amount,
+        due_date: newItem.due_date,
+        status: newItem.status,
+      })
+    } catch {
+      // ignora se tabela ainda não existe
+    }
+
+    try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(RECEIVABLES_PATH, blob, {
         upsert: true,
@@ -609,10 +789,10 @@ export async function toggleCustomerReceivableStatus(id: string): Promise<Custom
   const next = current.map((item) =>
     item.id === id
       ? {
-          ...item,
-          status: (item.status === 'pending' ? 'received' : 'pending') as 'pending' | 'received',
-          received_at: item.status === 'pending' ? new Date().toISOString() : undefined,
-        }
+        ...item,
+        status: (item.status === 'pending' ? 'received' : 'pending') as 'pending' | 'received',
+        received_at: item.status === 'pending' ? new Date().toISOString() : undefined,
+      }
       : item
   )
   memoryReceivablesCache = next
@@ -624,6 +804,21 @@ export async function toggleCustomerReceivableStatus(id: string): Promise<Custom
   }
 
   if (isSupabaseConfigured) {
+    const updated = next.find((i) => i.id === id)
+    if (updated) {
+      try {
+        await supabase
+          .from('customer_receivables')
+          .update({
+            status: updated.status,
+            received_at: updated.received_at || null,
+          })
+          .eq('id', id)
+      } catch {
+        // ignore
+      }
+    }
+
     try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(RECEIVABLES_PATH, blob, {
@@ -650,6 +845,12 @@ export async function deleteCustomerReceivable(id: string): Promise<CustomerRece
   }
 
   if (isSupabaseConfigured) {
+    try {
+      await supabase.from('customer_receivables').delete().eq('id', id)
+    } catch {
+      // ignore
+    }
+
     try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(RECEIVABLES_PATH, blob, {
@@ -679,6 +880,22 @@ export async function getExtraIncomes(): Promise<ExtraIncome[]> {
   if (!isSupabaseConfigured) {
     memoryExtraIncomesCache = localList
     return localList
+  }
+
+  // Tenta carregar da tabela extra_incomes
+  try {
+    const { data: dbRows, error: dbError } = await supabase
+      .from('extra_incomes')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (!dbError && dbRows && dbRows.length > 0) {
+      memoryExtraIncomesCache = dbRows as ExtraIncome[]
+      localStorage.setItem(LOCAL_EXTRA_INCOMES_KEY, JSON.stringify(dbRows))
+      return memoryExtraIncomesCache
+    }
+  } catch {
+    // fallback para storage
   }
 
   try {
@@ -731,6 +948,18 @@ export async function addExtraIncome(params: {
 
   if (isSupabaseConfigured) {
     try {
+      await supabase.from('extra_incomes').insert({
+        description: newItem.description,
+        category: newItem.category,
+        amount: newItem.amount,
+        cost_amount: newItem.cost_amount,
+        payment_method: newItem.payment_method,
+      })
+    } catch {
+      // ignore
+    }
+
+    try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(EXTRA_INCOMES_PATH, blob, {
         upsert: true,
@@ -756,6 +985,12 @@ export async function deleteExtraIncome(id: string): Promise<ExtraIncome[]> {
   }
 
   if (isSupabaseConfigured) {
+    try {
+      await supabase.from('extra_incomes').delete().eq('id', id)
+    } catch {
+      // ignore
+    }
+
     try {
       const blob = new Blob([JSON.stringify(next)], { type: 'application/json' })
       await supabase.storage.from(BUCKET).upload(EXTRA_INCOMES_PATH, blob, {

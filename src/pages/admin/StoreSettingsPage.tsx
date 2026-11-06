@@ -149,7 +149,7 @@ export function StoreSettingsPage() {
 
   return (
     <AdminLayout>
-      <div className="flex flex-col gap-5 max-w-3xl mx-auto w-full">
+      <div className="flex flex-col gap-5 max-w-5xl mx-auto w-full">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>

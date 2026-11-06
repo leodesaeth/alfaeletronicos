@@ -34,6 +34,14 @@ CREATE TABLE IF NOT EXISTS public.products (
   is_published      BOOLEAN     NOT NULL DEFAULT false,
   is_featured       BOOLEAN     NOT NULL DEFAULT false,
   display_order     INTEGER     NOT NULL DEFAULT 0,
+  stock_quantity    INTEGER     DEFAULT 0,
+  low_stock_threshold INTEGER   DEFAULT 2,
+  cost_price        NUMERIC(10,2),
+  compare_at_price  NUMERIC(10,2),
+  supplier          TEXT,
+  whatsapp_clicks   INTEGER     DEFAULT 0,
+  last_clicked_at   TIMESTAMPTZ,
+  variations        JSONB       DEFAULT '[]'::jsonb,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -53,13 +61,69 @@ CREATE TABLE IF NOT EXISTS public.store_settings (
   store_description   TEXT        DEFAULT 'Tecnologia, estilo e conveniência para o seu dia a dia.',
   logo_path           TEXT,
   whatsapp_number     TEXT        DEFAULT '5511999999999',
+  whatsapp_message_template TEXT,
+  hero_image_url      TEXT,
   primary_color       TEXT        DEFAULT '#111111',
   hero_title          TEXT        DEFAULT E'Tudo o que você precisa,\nem um só lugar.',
   hero_description    TEXT        DEFAULT 'Eletrônicos, acessórios, perfumes e muito mais, com qualidade e as melhores opções.',
   contact_email       TEXT,
   contact_address     TEXT,
   footer_text         TEXT,
+  financial_config    JSONB       DEFAULT '{}'::jsonb,
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Tabelas financeiras e de estoque
+CREATE TABLE IF NOT EXISTS public.stock_movements (
+  id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  product_id      UUID        NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  product_name    TEXT        NOT NULL,
+  type            TEXT        NOT NULL CHECK (type IN ('in', 'out', 'adjustment')),
+  reason          TEXT        NOT NULL DEFAULT 'sale',
+  payment_method  TEXT,
+  quantity        INTEGER     NOT NULL,
+  previous_stock  INTEGER     NOT NULL DEFAULT 0,
+  new_stock       INTEGER     NOT NULL DEFAULT 0,
+  unit_price      NUMERIC(10,2) DEFAULT 0,
+  unit_cost       NUMERIC(10,2) DEFAULT 0,
+  total_value     NUMERIC(10,2) DEFAULT 0,
+  profit_value    NUMERIC(10,2) DEFAULT 0,
+  supplier        TEXT,
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.store_expenses (
+  id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  description   TEXT        NOT NULL,
+  category      TEXT        NOT NULL DEFAULT 'fixa',
+  amount        NUMERIC(10,2) NOT NULL,
+  date          DATE        NOT NULL DEFAULT CURRENT_DATE,
+  due_date      DATE,
+  status        TEXT        NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'pending')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.customer_receivables (
+  id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_name   TEXT        NOT NULL,
+  customer_phone  TEXT,
+  description     TEXT,
+  amount          NUMERIC(10,2) NOT NULL,
+  due_date        DATE        NOT NULL,
+  status          TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'received')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  received_at     TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.extra_incomes (
+  id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  description     TEXT        NOT NULL,
+  category        TEXT        NOT NULL DEFAULT 'service',
+  amount          NUMERIC(10,2) NOT NULL,
+  cost_amount     NUMERIC(10,2) DEFAULT 0,
+  payment_method  TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 2. BUCKETS DE STORAGE (criados automaticamente como públicos)
@@ -70,23 +134,59 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- 3. POLÍTICAS DE ACESSO (RLS) — liberadas para leitura e edição
-ALTER TABLE public.categories     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.products       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.product_images ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_images      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_settings      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stock_movements     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_expenses      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_receivables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.extra_incomes       ENABLE ROW LEVEL SECURITY;
 
+-- Limpeza de políticas anteriores
+DROP POLICY IF EXISTS "admin_all_categories" ON public.categories;
+DROP POLICY IF EXISTS "public_read_active_categories" ON public.categories;
 DROP POLICY IF EXISTS "allow_all_categories" ON public.categories;
 CREATE POLICY "allow_all_categories" ON public.categories FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "admin_write_products" ON public.products;
+DROP POLICY IF EXISTS "admin_update_products" ON public.products;
+DROP POLICY IF EXISTS "admin_delete_products" ON public.products;
+DROP POLICY IF EXISTS "admin_read_all_products" ON public.products;
+DROP POLICY IF EXISTS "public_read_published_products" ON public.products;
 DROP POLICY IF EXISTS "allow_all_products" ON public.products;
 CREATE POLICY "allow_all_products" ON public.products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "admin_write_product_images" ON public.product_images;
+DROP POLICY IF EXISTS "admin_delete_product_images" ON public.product_images;
+DROP POLICY IF EXISTS "admin_read_all_product_images" ON public.product_images;
+DROP POLICY IF EXISTS "public_read_product_images" ON public.product_images;
 DROP POLICY IF EXISTS "allow_all_product_images" ON public.product_images;
 CREATE POLICY "allow_all_product_images" ON public.product_images FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "allow_all_store_settings" ON public.store_settings;
 CREATE POLICY "allow_all_store_settings" ON public.store_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "allow_all_stock_movements" ON public.stock_movements;
+CREATE POLICY "allow_all_stock_movements" ON public.stock_movements FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "allow_all_store_expenses" ON public.store_expenses;
+CREATE POLICY "allow_all_store_expenses" ON public.store_expenses FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "allow_all_customer_receivables" ON public.customer_receivables;
+CREATE POLICY "allow_all_customer_receivables" ON public.customer_receivables FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "allow_all_extra_incomes" ON public.extra_incomes;
+CREATE POLICY "allow_all_extra_incomes" ON public.extra_incomes FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can view product images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload product images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update product images" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete product images" ON storage.objects;
+DROP POLICY IF EXISTS "Public can view store assets" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can upload store assets" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can update store assets" ON storage.objects;
+DROP POLICY IF EXISTS "Admins can delete store assets" ON storage.objects;
 DROP POLICY IF EXISTS "allow_all_storage_objects" ON storage.objects;
 CREATE POLICY "allow_all_storage_objects" ON storage.objects FOR ALL TO anon, authenticated
   USING (bucket_id IN ('product-images', 'store-assets'))

@@ -59,12 +59,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-white/10">
-        <Link to="/admin" className="flex items-center gap-2">
+      <div className="px-4 py-5 border-b border-white/10 flex items-center justify-center">
+        <Link to="/admin" className="flex items-center justify-center w-full">
           <img
             src="/logo-alfa.png"
             alt="Alfa Eletrônicos"
-            className="h-8 w-auto object-contain"
+            className="h-8 w-auto object-contain mx-auto"
           />
         </Link>
       </div>

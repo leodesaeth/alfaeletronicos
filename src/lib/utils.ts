@@ -26,12 +26,12 @@ export function slugify(text: string): string {
 }
 
 // Normaliza número de telefone para formato WhatsApp (somente dígitos, com código do país)
-export function normalizeWhatsAppNumber(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
+export function normalizeWhatsAppNumber(phone?: string | null): string {
+  const digits = (phone || '').replace(/\D/g, '')
+  if (!digits) return '5511999999999'
   // Se não começa com código de país (Brasil = 55), adiciona
   if (digits.startsWith('55') && digits.length >= 12) return digits
-  if (digits.length === 11) return `55${digits}` // celular BR com DDD
-  if (digits.length === 10) return `55${digits}` // fixo BR com DDD
+  if (digits.length === 11 || digits.length === 10) return `55${digits}` // celular ou fixo BR com DDD
   return digits
 }
 

@@ -1,6 +1,20 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, X, Star, StarOff, AlertCircle, Loader2, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import {
+  ArrowLeft,
+  Upload,
+  X,
+  Star,
+  StarOff,
+  AlertCircle,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Plus,
+  ExternalLink,
+  Check,
+} from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import {
   getProductById,
@@ -12,7 +26,7 @@ import {
   reorderProductImages,
   validateImageFile,
 } from '@/services/products'
-import { getAllCategories } from '@/services/categories'
+import { getAllCategories, createCategory } from '@/services/categories'
 import {
   generateSmartProductCopy,
   getAllProductMeta,
@@ -23,6 +37,7 @@ import { cn } from '@/lib/utils'
 import type { Category, ProductImage, Availability } from '@/types'
 import { Input, Textarea, Select, Toggle } from '@/components/ui/FormFields'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/StateComponents'
 import toast from 'react-hot-toast'
 
@@ -94,6 +109,38 @@ export function ProductFormPage() {
   const [compareAtPrice, setCompareAtPrice] = useState<string>('')
   const [desiredMargin, setDesiredMargin] = useState<string>('35')
   const [supplier, setSupplier] = useState<string>('')
+
+  // Modal de Criação Rápida de Categoria no Fluxo do Produto
+  const [showQuickCategoryModal, setShowQuickCategoryModal] = useState(false)
+  const [quickCategoryName, setQuickCategoryName] = useState('')
+  const [quickCategoryLoading, setQuickCategoryLoading] = useState(false)
+
+  const handleCreateQuickCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quickCategoryName.trim()) {
+      toast.error('Informe o nome da categoria.')
+      return
+    }
+
+    setQuickCategoryLoading(true)
+    try {
+      const newCat = await createCategory({
+        name: quickCategoryName.trim(),
+        description: `Produtos e novidades em ${quickCategoryName.trim()}`,
+        display_order: categories.length + 1,
+        is_active: true,
+      })
+      setCategories((prev) => [...prev, newCat])
+      update('category_id', newCat.id)
+      toast.success(`Categoria "${newCat.name}" criada e selecionada!`)
+      setShowQuickCategoryModal(false)
+      setQuickCategoryName('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar categoria.')
+    } finally {
+      setQuickCategoryLoading(false)
+    }
+  }
 
   useEffect(() => {
     getAllCategories().then(setCategories)
@@ -200,10 +247,9 @@ export function ProductFormPage() {
     // Se o produto ainda não foi salvo, apenas mantém para upload posterior
     if (!currentPid) return
 
-    // Upload imediato se produto já existe
-    for (let i = 0; i < newItems.length; i++) {
-      const item = newItems[i]
-      if (item.error) continue
+    // Upload imediato em paralelo se produto já existe
+    const uploadTasks = newItems.map(async (item, i) => {
+      if (item.error || !item.file) return
 
       setImages((prev) =>
         prev.map((img) =>
@@ -212,9 +258,9 @@ export function ProductFormPage() {
       )
 
       try {
-        const isPrimary = item.is_primary
+        const isPrimary = images.length === 0 && i === 0
         const order = images.length + i
-        const uploaded = await uploadProductImage(item.file!, currentPid, order, isPrimary)
+        const uploaded = await uploadProductImage(item.file, currentPid, order, isPrimary)
 
         setImages((prev) =>
           prev.map((img) =>
@@ -238,7 +284,9 @@ export function ProductFormPage() {
           )
         )
       }
-    }
+    })
+
+    await Promise.allSettled(uploadTasks)
   }
 
   const handleDropZone = (e: React.DragEvent) => {
@@ -248,37 +296,49 @@ export function ProductFormPage() {
   }
 
   const handleRemoveImage = async (item: ImageItem, idx: number) => {
-    if (item.id && item.storage_path) {
+    // 1. Remove do estado imediatamente para resposta instantânea na tela
+    if (item.public_url && item.public_url.startsWith('blob:')) {
       try {
-        await deleteProductImage(item.id, item.storage_path)
+        URL.revokeObjectURL(item.public_url)
       } catch {
-        toast.error('Erro ao remover imagem.')
-        return
+        // ignore
       }
     }
-    URL.revokeObjectURL(item.public_url)
+
     setImages((prev) => {
       const next = prev.filter((_, i) => i !== idx)
-      // Garantir que haja uma imagem primária
+      // Se removeu a principal e restam fotos, a primeira vira a principal
       if (item.is_primary && next.length > 0) {
         next[0].is_primary = true
       }
       return next
     })
+
+    toast.success('Imagem removida.')
+
+    // 2. Remove do storage e banco em background (não bloqueia a interface)
+    if (item.id && item.storage_path) {
+      try {
+        await deleteProductImage(item.id, item.storage_path)
+      } catch (err) {
+        console.warn('Aviso ao remover imagem remota:', err)
+      }
+    }
   }
 
   const handleSetPrimary = async (item: ImageItem, idx: number) => {
-    if (item.id && productId) {
-      try {
-        await setPrimaryImage(item.id, productId)
-      } catch {
-        toast.error('Erro ao definir imagem principal.')
-        return
-      }
-    }
     setImages((prev) =>
       prev.map((img, i) => ({ ...img, is_primary: i === idx }))
     )
+    toast.success('Foto principal atualizada!')
+
+    if (item.id && productId) {
+      try {
+        await setPrimaryImage(item.id, productId)
+      } catch (err) {
+        console.warn('Aviso ao sincronizar foto principal no servidor:', err)
+      }
+    }
   }
 
   const handleMoveImage = async (idx: number, direction: 'left' | 'right') => {
@@ -363,17 +423,17 @@ export function ProductFormPage() {
         })
       }
 
-      // Upload de imagens pendentes (para novos produtos)
+      // Upload paralelo e rápido de imagens pendentes (para novos produtos)
       const pendingImages = images.filter((img) => img.file && !img.id && !img.error)
       if (pendingImages.length > 0 && savedProduct.id) {
-        for (let i = 0; i < pendingImages.length; i++) {
-          const item = pendingImages[i]
+        const existingCount = images.filter((img) => img.id).length
+        const uploadTasks = pendingImages.map(async (item, i) => {
+          setImages((prev) =>
+            prev.map((img) => img.file === item.file ? { ...img, uploading: true } : img)
+          )
+          const isPrimary = i === 0 && existingCount === 0
           try {
-            setImages((prev) =>
-              prev.map((img) => img.file === item.file ? { ...img, uploading: true } : img)
-            )
-            const isPrimary = i === 0 && images.filter((img) => img.id).length === 0
-            const uploaded = await uploadProductImage(item.file!, savedProduct.id, i, isPrimary)
+            const uploaded = await uploadProductImage(item.file!, savedProduct.id, existingCount + i, isPrimary)
             setImages((prev) =>
               prev.map((img) =>
                 img.file === item.file
@@ -381,20 +441,28 @@ export function ProductFormPage() {
                   : img
               )
             )
+            return uploaded
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : 'Erro no upload.'
             setImages((prev) =>
               prev.map((img) => img.file === item.file ? { ...img, uploading: false, error: errMsg } : img)
             )
-            toast.error(`Falha no upload de "${item.file?.name}": ${errMsg}`)
+            throw err
           }
-        }
+        })
+
+        await Promise.allSettled(uploadTasks)
       }
 
-      // Se for novo produto e imagens carregaram, redirecionar para edição
-      if (!isEditing) {
-        navigate(`/admin/produtos/${savedProduct.id}/editar`, { replace: true })
-      }
+      toast.success(
+        isEditing
+          ? 'Produto atualizado com sucesso!'
+          : publish
+          ? 'Produto cadastrado e publicado na vitrine!'
+          : 'Produto cadastrado com sucesso!'
+      )
+
+      navigate('/admin/produtos', { replace: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar.'
       toast.error(msg)
@@ -410,20 +478,34 @@ export function ProductFormPage() {
 
   return (
     <AdminLayout>
-      <div className="max-w-3xl mx-auto w-full">
+      <div className="max-w-5xl mx-auto w-full">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 mb-6">
-          <Link
-            to="/admin/produtos"
-            className="flex items-center gap-1.5 text-sm text-muted hover:text-brand transition-colors"
-          >
-            <ArrowLeft size={16} />
-            Produtos
-          </Link>
-          <span className="text-muted">/</span>
-          <span className="text-sm font-medium text-graphite">
-            {isEditing ? 'Editar produto' : 'Novo produto'}
-          </span>
+        <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/produtos"
+              className="flex items-center gap-1.5 text-sm text-muted hover:text-brand transition-colors"
+            >
+              <ArrowLeft size={16} />
+              Produtos
+            </Link>
+            <span className="text-muted">/</span>
+            <span className="text-sm font-medium text-graphite">
+              {isEditing ? 'Editar produto' : 'Novo produto'}
+            </span>
+          </div>
+
+          {isEditing && form.slug && (
+            <a
+              href={`/produto/${form.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#111111] bg-white border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg shadow-xs transition-colors"
+            >
+              <ExternalLink size={13} />
+              Ver na loja
+            </a>
+          )}
         </div>
 
         <div className="flex flex-col gap-5">
@@ -440,15 +522,27 @@ export function ProductFormPage() {
               error={errors.name}
             />
 
-            <Select
-              label="Categoria"
-              required
-              value={form.category_id}
-              onChange={(e) => update('category_id', e.target.value)}
-              options={categories.map((c) => ({ value: c.id, label: c.name }))}
-              placeholder="Selecione uma categoria..."
-              error={errors.category_id}
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-graphite">
+                  Categoria <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCategoryModal(true)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#111111] bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-md transition-colors"
+                >
+                  <Plus size={13} /> Nova categoria
+                </button>
+              </div>
+              <Select
+                value={form.category_id}
+                onChange={(e) => update('category_id', e.target.value)}
+                options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                placeholder="Selecione uma categoria..."
+                error={errors.category_id}
+              />
+            </div>
 
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-xs text-muted">
@@ -556,14 +650,14 @@ export function ProductFormPage() {
 
             {/* Grid de imagens */}
             {images.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {images.map((img, idx) => (
                   <div
                     key={idx}
                     className={cn(
-                      'relative group rounded-xl overflow-hidden border-2 aspect-square bg-surface',
-                      img.is_primary ? 'border-brand' : 'border-transparent',
-                      img.error ? 'border-red-300' : ''
+                      'relative group rounded-xl overflow-hidden border-2 aspect-square bg-surface shadow-sm transition-all',
+                      img.is_primary ? 'border-brand ring-2 ring-brand/20' : 'border-gray-200',
+                      img.error ? 'border-red-400 ring-2 ring-red-400/20' : ''
                     )}
                   >
                     <img
@@ -572,91 +666,93 @@ export function ProductFormPage() {
                       className="w-full h-full object-cover"
                     />
 
+                    {/* Botão Remover (Sempre visível no canto superior direito para fácil toque no celular) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveImage(img, idx)
+                      }}
+                      title="Remover imagem"
+                      className="absolute top-1.5 right-1.5 z-20 w-7 h-7 rounded-full bg-black/75 hover:bg-red-600 text-white flex items-center justify-center transition-all shadow-md active:scale-90"
+                    >
+                      <X size={13} />
+                    </button>
+
+                    {/* Badge / Botão de Imagem Principal no canto superior esquerdo */}
+                    {!img.uploading && !img.error && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSetPrimary(img, idx)
+                        }}
+                        title={img.is_primary ? 'Foto principal' : 'Tocar para definir como principal'}
+                        className={cn(
+                          'absolute top-1.5 left-1.5 z-20 text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1 transition-all active:scale-95',
+                          img.is_primary
+                            ? 'bg-[#111111] text-amber-400 border border-amber-400/40'
+                            : 'bg-black/65 text-white/90 hover:bg-black/90 hover:text-white'
+                        )}
+                      >
+                        <Star size={11} fill={img.is_primary ? 'currentColor' : 'none'} />
+                        <span>{img.is_primary ? 'Principal' : 'Principal?'}</span>
+                      </button>
+                    )}
+
+                    {/* Reordenação no canto inferior */}
+                    {images.length > 1 && !img.uploading && !img.error && (
+                      <div className="absolute bottom-1.5 right-1.5 z-20 flex items-center gap-1 bg-black/70 p-0.5 rounded-full backdrop-blur-sm shadow-md">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleMoveImage(idx, 'left')
+                          }}
+                          title="Mover foto para esquerda"
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-white disabled:opacity-30 hover:bg-white/20 transition-colors"
+                        >
+                          <ChevronLeft size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === images.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleMoveImage(idx, 'right')
+                          }}
+                          title="Mover foto para direita"
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-white disabled:opacity-30 hover:bg-white/20 transition-colors"
+                        >
+                          <ChevronRight size={12} />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Loading overlay */}
                     {img.uploading && (
-                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                        <Loader2 size={20} className="animate-spin text-brand" />
+                      <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center p-2">
+                        <Loader2 size={22} className="animate-spin text-brand mb-1" />
+                        <span className="text-[10px] font-medium text-graphite">Enviando foto...</span>
                       </div>
                     )}
 
                     {/* Error overlay */}
                     {img.error && (
-                      <div className="absolute inset-0 bg-red-50/90 flex flex-col items-center justify-center p-1">
-                        <AlertCircle size={16} className="text-red-400 mb-1" />
-                        <p className="text-xs text-red-500 text-center leading-tight">{img.error}</p>
+                      <div className="absolute inset-0 z-10 bg-red-950/85 text-white flex flex-col items-center justify-center p-2.5 text-center">
+                        <AlertCircle size={18} className="text-red-400 mb-1" />
+                        <p className="text-[10px] font-semibold text-red-200 leading-tight mb-2 line-clamp-3">
+                          {img.error}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(img, idx)}
+                          className="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded-full font-medium shadow"
+                        >
+                          Remover
+                        </button>
                       </div>
-                    )}
-
-                    {/* Ações */}
-                    {!img.uploading && !img.error && (
-                      <div className="absolute inset-0 bg-[#111111]/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                          {/* Primária */}
-                          <button
-                            type="button"
-                            onClick={() => handleSetPrimary(img, idx)}
-                            title={img.is_primary ? 'Imagem principal' : 'Definir como principal'}
-                            className={cn(
-                              'w-7 h-7 rounded-full flex items-center justify-center transition-colors',
-                              img.is_primary
-                                ? 'bg-[#111111] text-white'
-                                : 'bg-white/95 text-[#767676] hover:text-[#111111]'
-                            )}
-                          >
-                            {img.is_primary ? <Star size={12} fill="currentColor" /> : <StarOff size={12} />}
-                          </button>
-
-                          {/* Remover */}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(img, idx)}
-                            title="Remover imagem"
-                            className="w-7 h-7 rounded-full bg-white/95 flex items-center justify-center text-[#767676] hover:text-red-500 transition-colors"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-
-                        {images.length > 1 && (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={idx === 0}
-                              onClick={() => handleMoveImage(idx, 'left')}
-                              title="Mover para esquerda"
-                              className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-[#242424] disabled:opacity-40 hover:bg-white transition-colors"
-                            >
-                              <ChevronLeft size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === images.length - 1}
-                              onClick={() => handleMoveImage(idx, 'right')}
-                              title="Mover para direita"
-                              className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-[#242424] disabled:opacity-40 hover:bg-white transition-colors"
-                            >
-                              <ChevronRight size={12} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Badge primária */}
-                    {img.is_primary && !img.uploading && !img.error && (
-                      <div className="absolute bottom-1 left-1 bg-[#111111] text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full shadow-sm">
-                        Principal
-                      </div>
-                    )}
-
-                    {/* Botão remover no canto (para erro) */}
-                    {img.error && (
-                      <button
-                        onClick={() => handleRemoveImage(img, idx)}
-                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
-                      >
-                        <X size={10} />
-                      </button>
                     )}
                   </div>
                 ))}
@@ -888,12 +984,50 @@ export function ProductFormPage() {
                 loading={saving && form.is_published}
                 disabled={saving || uploadingCount > 0}
               >
-                {isEditing ? 'Atualizar' : 'Publicar'}
+                {isEditing ? 'Atualizar produto' : 'Salvar e Publicar'}
               </Button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal de Criação Rápida de Categoria no Fluxo do Produto */}
+      <Modal
+        isOpen={showQuickCategoryModal}
+        onClose={() => {
+          setShowQuickCategoryModal(false)
+          setQuickCategoryName('')
+        }}
+        title="Criar nova categoria"
+        size="sm"
+      >
+        <form onSubmit={handleCreateQuickCategory} className="flex flex-col gap-4">
+          <p className="text-xs text-muted leading-relaxed">
+            A categoria será salva imediatamente e selecionada neste produto sem perder seus dados.
+          </p>
+          <Input
+            label="Nome da categoria"
+            required
+            value={quickCategoryName}
+            onChange={(e) => setQuickCategoryName(e.target.value)}
+            placeholder="Ex: Fones e Caixas JBL"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowQuickCategoryModal(false)}
+              disabled={quickCategoryLoading}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" loading={quickCategoryLoading}>
+              Criar e selecionar
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </AdminLayout>
   )
 }

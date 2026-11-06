@@ -61,7 +61,23 @@ export async function getCategoryBySlug(slug: string): Promise<Category | null> 
 
 // Cria categoria
 export async function createCategory(formData: CategoryFormData): Promise<Category> {
-  const slug = slugify(formData.name)
+  const baseSlug = slugify(formData.name || 'categoria')
+
+  // Garante slug único evitando erro de chave duplicada
+  let slug = baseSlug
+  if (isSupabaseConfigured) {
+    let counter = 1
+    while (true) {
+      const { data: existing } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', slug)
+        .maybeSingle()
+      if (!existing) break
+      counter++
+      slug = `${baseSlug}-${counter}`
+    }
+  }
 
   const { data, error } = await supabase
     .from('categories')
@@ -88,7 +104,23 @@ export async function updateCategory(
 ): Promise<Category> {
   const updates: Record<string, unknown> = { ...formData }
   if (formData.name) {
-    updates.slug = slugify(formData.name)
+    const baseSlug = slugify(formData.name)
+    let slug = baseSlug
+    if (isSupabaseConfigured) {
+      let counter = 1
+      while (true) {
+        const { data: existing } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('slug', slug)
+          .neq('id', id)
+          .maybeSingle()
+        if (!existing) break
+        counter++
+        slug = `${baseSlug}-${counter}`
+      }
+    }
+    updates.slug = slug
   }
   // Limpeza de campos opcionais
   if ('description' in updates && !updates.description) updates.description = null
