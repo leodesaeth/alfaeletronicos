@@ -442,17 +442,25 @@ export function ProductFormPage() {
             setImages((prev) =>
               prev.map((img) =>
                 img.file === item.file
-                  ? { id: uploaded.id, storage_path: uploaded.storage_path, public_url: uploaded.public_url || '', is_primary: uploaded.is_primary, display_order: uploaded.display_order, uploading: false }
+                  ? {
+                      id: uploaded.id,
+                      storage_path: uploaded.storage_path,
+                      public_url: uploaded.public_url || '',
+                      is_primary: uploaded.is_primary,
+                      display_order: uploaded.display_order,
+                      uploading: false,
+                    }
                   : img
               )
             )
             return uploaded
           } catch (err) {
+            console.warn('[ProductForm] Aviso no upload da imagem:', err)
             const errMsg = err instanceof Error ? err.message : 'Erro no upload.'
             setImages((prev) =>
               prev.map((img) => img.file === item.file ? { ...img, uploading: false, error: errMsg } : img)
             )
-            throw err
+            return null
           }
         })
 
@@ -469,7 +477,15 @@ export function ProductFormPage() {
 
       navigate('/admin/produtos', { replace: true })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao salvar.'
+      console.error('[ProductForm] Erro ao salvar:', err)
+      let msg = 'Erro ao salvar produto. Tente novamente.'
+      if (err instanceof Error) {
+        if (err.message.includes('Failed to fetch') || err.message.includes('Load failed')) {
+          msg = 'Falha de comunicação temporária com o servidor. Verifique sua conexão à internet.'
+        } else {
+          msg = err.message
+        }
+      }
       toast.error(msg)
     } finally {
       setSaving(false)
