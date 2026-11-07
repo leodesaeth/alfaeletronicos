@@ -3,6 +3,7 @@ import type { Product, ProductImage, ProductFormData, CatalogFilters } from '@/t
 import { slugify } from '@/lib/utils'
 import { SHOWCASE_PRODUCTS, SHOWCASE_CATEGORIES } from '@/lib/showcaseData'
 import { optimizeImageFile } from '@/lib/imageOptimizer'
+import { getAllProductMeta } from '@/services/catalogIntelligence'
 
 const BUCKET = 'product-images'
 const MAX_FILE_SIZE = 8 * 1024 * 1024 // 8 MB tolerante para fotos de celular
@@ -105,13 +106,6 @@ export async function getPublishedProducts(
     if (cat) query = query.eq('category_id', cat.id)
   }
 
-  if (filters.search && filters.search.trim()) {
-    const term = filters.search.trim()
-    query = query.or(
-      `name.ilike.%${term}%,short_description.ilike.%${term}%,description.ilike.%${term}%`
-    )
-  }
-
   // Ordenação
   switch (filters.sort) {
     case 'name_asc':
@@ -137,7 +131,25 @@ export async function getPublishedProducts(
   if (error) return filterShowcaseProducts(filters)
 
   // Enriquecer com URLs públicas
-  return (data || []).map(enrichProductImages)
+  let results = (data || []).map(enrichProductImages)
+
+  if (filters.search && filters.search.trim()) {
+    const term = filters.search.trim().toLowerCase()
+    const metaMap = await getAllProductMeta()
+    results = results.filter((p) => {
+      const sku = metaMap[p.id]?.sku || ''
+      const catName = p.category?.name || ''
+      return (
+        p.name.toLowerCase().includes(term) ||
+        (p.short_description || '').toLowerCase().includes(term) ||
+        (p.description || '').toLowerCase().includes(term) ||
+        catName.toLowerCase().includes(term) ||
+        sku.toLowerCase().includes(term)
+      )
+    })
+  }
+
+  return results
 }
 
 // Busca produto publicado por slug

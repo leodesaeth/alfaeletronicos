@@ -101,7 +101,8 @@ export function ProductFormPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [productId, setProductId] = useState<string | null>(id || null)
 
-  // Metadados extras (Estoque, Custo, Promoção e Variações)
+  // Metadados extras (SKU, Estoque, Custo, Promoção e Variações)
+  const [sku, setSku] = useState<string>('')
   const [stockQuantity, setStockQuantity] = useState<string>('')
   const [lowStockThreshold, setLowStockThreshold] = useState<string>('2')
   const [variationsText, setVariationsText] = useState<string>('')
@@ -172,6 +173,9 @@ export function ProductFormPage() {
         })
         const meta = metaMap[id]
         if (meta) {
+          if (meta.sku) {
+            setSku(meta.sku)
+          }
           if (meta.stock_quantity !== undefined && meta.stock_quantity !== null) {
             setStockQuantity(String(meta.stock_quantity))
           }
@@ -414,6 +418,7 @@ export function ProductFormPage() {
             : null
 
         await updateProductMeta(savedProduct.id, {
+          sku: sku.trim() || undefined,
           stock_quantity: parsedStock,
           low_stock_threshold: parseInt(lowStockThreshold, 10) || 2,
           cost_price: parsedCost && !isNaN(parsedCost) ? parsedCost : null,
@@ -478,7 +483,7 @@ export function ProductFormPage() {
 
   return (
     <AdminLayout>
-      <div className="max-w-5xl mx-auto w-full">
+      <div className="w-full max-w-[1600px]">
         {/* Breadcrumb */}
         <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
           <div className="flex items-center gap-2">
@@ -513,14 +518,24 @@ export function ProductFormPage() {
           <section className="bg-white rounded-2xl shadow-card p-5 sm:p-6 flex flex-col gap-4">
             <h2 className="font-semibold text-graphite">A — Informações principais</h2>
 
-            <Input
-              label="Nome do produto"
-              required
-              value={form.name}
-              onChange={(e) => update('name', e.target.value)}
-              placeholder="Ex: iPhone 15 Pro Max 256GB"
-              error={errors.name}
-            />
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="sm:col-span-2">
+                <Input
+                  label="Nome do produto"
+                  required
+                  value={form.name}
+                  onChange={(e) => update('name', e.target.value)}
+                  placeholder="Ex: iPhone 15 Pro Max 256GB"
+                  error={errors.name}
+                />
+              </div>
+              <Input
+                label="Código / SKU (Opcional)"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                placeholder="Ex: ALFA-IP15PM-256"
+              />
+            </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">

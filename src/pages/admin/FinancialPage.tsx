@@ -237,6 +237,7 @@ export function FinancialPage() {
     let productGrossRevenue = 0
     let productCmv = 0
     let totalCardFees = 0
+    let salesWithoutCostCount = 0
 
     const byPayment: Record<PaymentMethod, { gross: number; fees: number; net: number }> = {
       pix: { gross: 0, fees: 0, net: 0 },
@@ -248,7 +249,11 @@ export function FinancialPage() {
 
     for (const sale of salesMovements) {
       const rev = sale.total_value ?? (sale.unit_price || 0) * sale.quantity
-      const cmv = (sale.unit_cost || 0) * sale.quantity
+      const hasUnitCost = typeof sale.unit_cost === 'number' && sale.unit_cost > 0
+      const cmv = hasUnitCost ? sale.unit_cost! * sale.quantity : 0
+      if (!hasUnitCost) {
+        salesWithoutCostCount++
+      }
       const method: PaymentMethod = sale.payment_method || 'pix'
       const fee = rev * getCardFeeRate(method)
 
@@ -363,6 +368,7 @@ export function FinancialPage() {
       pendingReceivablesTotal,
       overduePayablesCount,
       overdueReceivablesCount,
+      salesWithoutCostCount,
     }
   }, [movements, extraIncomes, expenses, receivables, period, finConfig])
 
@@ -407,6 +413,14 @@ export function FinancialPage() {
           return
         }
         const meta = metaMap[prod.id] || {}
+        const currentStock = meta.stock_quantity ?? 0
+        if (qty > currentStock) {
+          toast.error(
+            `Estoque insuficiente (${currentStock} un. disponíveis para "${prod.name}").`
+          )
+          setSavingPdv(false)
+          return
+        }
         const result = await registerStockMovement({
           productId: prod.id,
           productName: prod.name,
@@ -416,6 +430,7 @@ export function FinancialPage() {
           quantity: qty,
           unitPrice: !isNaN(price) ? price : prod.price || 0,
           unitCost: meta.cost_price ?? 0,
+          responsible: 'Admin Alfa',
           note: pdvNote.trim() || `Venda PDV (${PAYMENT_LABELS[pdvPayment]})`,
         })
         setMetaMap((prev) => ({ ...prev, [prod.id]: result.meta }))
@@ -645,7 +660,7 @@ export function FinancialPage() {
 
   return (
     <AdminLayout>
-      <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="w-full max-w-[1600px] space-y-6">
       {/* ── Cabeçalho Executivo + Filtro de Período + Ações Rápidas ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -653,7 +668,7 @@ export function FinancialPage() {
             Central Financeira & DRE
           </h1>
           <p className="text-sm text-[#767676] mt-0.5">
-            Faturamento bruto, lucro líquido descontando taxas de maquininha, contas a pagar e vendas a receber.
+            Faturamento bruto real, CMV, lucro líquido descontando taxas de maquininha, contas a pagar e vendas a receber.
           </p>
         </div>
 

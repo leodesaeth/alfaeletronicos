@@ -100,7 +100,13 @@ export function ProductsPage() {
   }, [load])
 
   const filtered = products.filter((p) => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase())
+    const meta = metaMap[p.id]
+    const q = search.toLowerCase().trim()
+    const matchSearch =
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      (p.category?.name && p.category.name.toLowerCase().includes(q)) ||
+      (meta?.sku && meta.sku.toLowerCase().includes(q))
     const matchCat = !filterCategory || p.category_id === filterCategory
     const matchStatus =
       filterStatus === 'all' ||
@@ -109,7 +115,9 @@ export function ProductsPage() {
     const matchPending =
       !filterPending ||
       (filterPending === 'sem-foto' && (!p.product_images || p.product_images.length === 0)) ||
-      (filterPending === 'sem-preco' && (!p.price || p.price <= 0))
+      (filterPending === 'sem-preco' && (!p.price || p.price <= 0)) ||
+      (filterPending === 'sem-custo' && (!meta?.cost_price || meta.cost_price <= 0)) ||
+      (filterPending === 'sem-estoque' && (meta?.stock_quantity ?? 0) <= 0)
     return matchSearch && matchCat && matchStatus && matchPending
   })
 
@@ -407,7 +415,7 @@ export function ProductsPage() {
 
   return (
     <AdminLayout>
-      <div className="flex flex-col gap-5 max-w-6xl mx-auto w-full">
+      <div className="flex flex-col gap-5 w-full max-w-[1600px]">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -461,7 +469,7 @@ export function ProductsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome..."
+              placeholder="Buscar por nome, SKU ou categoria..."
               className="flex-1 text-sm text-graphite outline-none placeholder-gray-400"
             />
           </div>
@@ -486,7 +494,9 @@ export function ProductsPage() {
           >
             <option value="">Todas as situações</option>
             <option value="sem-foto">Sem fotografia</option>
-            <option value="sem-preco">Sem preço</option>
+            <option value="sem-preco">Sem preço de venda</option>
+            <option value="sem-custo">Sem preço de custo</option>
+            <option value="sem-estoque">Sem estoque (0 un.)</option>
           </select>
 
           {/* Status */}
@@ -589,6 +599,13 @@ export function ProductsPage() {
                       product.product_images?.find((i) => i.is_primary) ||
                       product.product_images?.[0]
                     const isSelected = selectedIds.includes(product.id)
+                    const meta = metaMap[product.id]
+                    const hasCost =
+                      typeof meta?.cost_price === 'number' && meta.cost_price > 0
+                    const marginPct =
+                      hasCost && product.price && product.price > 0
+                        ? Math.round(((product.price - meta!.cost_price!) / product.price) * 100)
+                        : null
 
                     return (
                       <tr key={product.id} className="hover:bg-surface/60 transition-colors">
@@ -625,11 +642,17 @@ export function ProductsPage() {
                             <div className="min-w-0">
                               <Link
                                 to={`/admin/produtos/${product.id}/editar`}
-                                className="text-sm font-semibold text-[#111111] hover:underline truncate block max-w-[200px]"
+                                className="text-sm font-semibold text-[#111111] hover:underline truncate block max-w-[240px]"
                               >
                                 {product.name}
                               </Link>
-                              <div className="flex items-center gap-2.5 flex-wrap mt-0.5">
+                              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                {meta?.sku && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#F4F4F4] text-[#555555]">
+                                    SKU: {meta.sku}
+                                  </span>
+                                )}
+
                                 <button
                                   onClick={() => handleToggleFeatured(product)}
                                   className={cn(
@@ -646,28 +669,35 @@ export function ProductsPage() {
                                   {product.is_featured ? 'Em destaque' : 'Destacar'}
                                 </button>
 
-                                {metaMap[product.id]?.stock_quantity !== undefined &&
-                                  metaMap[product.id]?.stock_quantity !== null && (
-                                    <span
-                                      className={cn(
-                                        'text-[10px] font-semibold px-1.5 py-0.5 rounded',
-                                        (metaMap[product.id]?.stock_quantity ?? 0) <=
-                                          (metaMap[product.id]?.low_stock_threshold ?? 2)
-                                          ? 'bg-red-50 text-red-700'
-                                          : 'bg-gray-100 text-gray-600'
-                                      )}
-                                    >
-                                      Est: {metaMap[product.id]?.stock_quantity}
-                                    </span>
+                                <span
+                                  className={cn(
+                                    'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                                    (meta?.stock_quantity ?? 0) <=
+                                      (meta?.low_stock_threshold ?? 2)
+                                      ? 'bg-red-50 text-red-700'
+                                      : 'bg-gray-100 text-gray-600'
                                   )}
+                                >
+                                  Est: {meta?.stock_quantity ?? 0} un.
+                                </span>
 
-                                {(metaMap[product.id]?.whatsapp_clicks || 0) > 0 && (
+                                {marginPct !== null ? (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#F0FDF4] text-[#166534]">
+                                    Margem {marginPct}%
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#FFFBEB] text-[#92400E]">
+                                    Sem custo
+                                  </span>
+                                )}
+
+                                {(meta?.whatsapp_clicks || 0) > 0 && (
                                   <span
                                     title="Cliques no botão de WhatsApp"
                                     className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#24A850] bg-[#24A850]/10 px-1.5 py-0.5 rounded"
                                   >
                                     <MessageCircle size={10} />
-                                    {metaMap[product.id]?.whatsapp_clicks}
+                                    {meta?.whatsapp_clicks}
                                   </span>
                                 )}
                               </div>

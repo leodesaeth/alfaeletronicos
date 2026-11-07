@@ -26,6 +26,7 @@ import { PageLoader } from '@/components/ui/StateComponents'
 import {
   getAllProductMeta,
   recordWhatsAppClick,
+  recordProductView,
   type ProductMetaItem,
 } from '@/services/catalogIntelligence'
 import { addToQuoteBag, openQuoteBagDrawer } from '@/lib/quoteBag'
@@ -57,6 +58,7 @@ export function ProductPage() {
           return
         }
         setProduct(data)
+        recordProductView(data.id)
 
         const metaMap = await getAllProductMeta()
         const metaItem = metaMap[data.id] || null
@@ -272,6 +274,11 @@ export function ProductPage() {
               {product.is_featured && (
                 <span className="text-[10px] bg-[#111111] text-white font-semibold px-2.5 py-1 rounded-full">
                   Destaque
+                </span>
+              )}
+              {prodMeta?.sku && (
+                <span className="text-[10px] bg-[#F4F4F4] text-[#555555] font-semibold px-2.5 py-1 rounded-full">
+                  Cód: {prodMeta.sku}
                 </span>
               )}
             </div>

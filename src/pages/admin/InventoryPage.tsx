@@ -10,10 +10,6 @@ import {
   History,
   Search,
   DollarSign,
-  Flame,
-  PackageX,
-  RefreshCw,
-  CheckCircle2,
   Package,
   TrendingUp,
   PieChart,
@@ -23,6 +19,7 @@ import {
   Tag,
   ShieldAlert,
   Gift,
+  CheckCircle2,
 } from 'lucide-react'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { getAllProducts, updateProduct } from '@/services/products'
@@ -89,6 +86,7 @@ export function InventoryPage() {
   const [movQty, setMovQty] = useState('1')
   const [movUnitCost, setMovUnitCost] = useState('')
   const [movSupplier, setMovSupplier] = useState('')
+  const [movResponsible, setMovResponsible] = useState('Admin Alfa')
   const [movNote, setMovNote] = useState('')
   const [movSaving, setMovSaving] = useState(false)
 
@@ -122,27 +120,6 @@ export function InventoryPage() {
     loadData()
   }, [loadData])
 
-  // Inicializar estoque e custos realistas padrão se houver itens sem custo/estoque
-  const handleInitializeDefaults = async () => {
-    setLoading(true)
-    try {
-      for (const p of products) {
-        const current = metaMap[p.id] || {}
-        const defaultCost = p.price ? Math.round(p.price * 0.65 * 100) / 100 : 50
-        await updateProductMeta(p.id, {
-          stock_quantity: current.stock_quantity ?? 8,
-          low_stock_threshold: current.low_stock_threshold ?? 2,
-          cost_price: current.cost_price ?? defaultCost,
-        })
-      }
-      toast.success('Estoque e custos base configurados para todos os produtos!')
-      await loadData()
-    } catch {
-      toast.error('Erro ao inicializar dados.')
-      setLoading(false)
-    }
-  }
-
   // Salvar Preço de Custo inline na tabela
   const handleInlineCostSave = async (product: Product) => {
     setEditingCostId(null)
@@ -169,12 +146,20 @@ export function InventoryPage() {
     reason?: StockMovementReason,
     note?: string
   ) => {
+    const currentMeta = metaMap[product.id] || {}
+    const currentStock = currentMeta.stock_quantity ?? 0
+    if (type === 'out' && qty > currentStock) {
+      toast.error(`Estoque insuficiente (${currentStock} un. disponíveis).`)
+      return
+    }
+
     setProcessingId(product.id)
     try {
-      const currentMeta = metaMap[product.id] || {}
       const unitPrice = product.price ?? 0
       const unitCost =
-        currentMeta.cost_price ?? (unitPrice > 0 ? Math.round(unitPrice * 0.65) : 0)
+        typeof currentMeta.cost_price === 'number' && currentMeta.cost_price > 0
+          ? currentMeta.cost_price
+          : 0
 
       const { newStock, movement, marginWarning } = await registerStockMovement({
         productId: product.id,
@@ -185,6 +170,7 @@ export function InventoryPage() {
         quantity: qty,
         unitPrice,
         unitCost,
+        responsible: 'Admin Alfa',
         note:
           note ||
           (type === 'out' ? 'Venda rápida (-1 un. via PIX)' : 'Reposição rápida (+1 un.)'),
@@ -205,7 +191,7 @@ export function InventoryPage() {
         )
       } else {
         const profitMsg =
-          type === 'out' && movement.profit_value
+          type === 'out' && movement.profit_value !== undefined
             ? ` (Lucro: +${formatBRL(movement.profit_value)})`
             : ''
         toast.success(
@@ -233,9 +219,17 @@ export function InventoryPage() {
       return
     }
 
+    const currentMeta = metaMap[modalProduct.id] || {}
+    const currentStock = currentMeta.stock_quantity ?? 0
+    if (movType === 'out' && qty > currentStock) {
+      toast.error(
+        `Operação bloqueada: saldo insuficiente (${currentStock} un. em estoque para retirar ${qty} un.).`
+      )
+      return
+    }
+
     setMovSaving(true)
     try {
-      const currentMeta = metaMap[modalProduct.id] || {}
       const parsedCost = movUnitCost.replace(',', '.').trim()
         ? parseFloat(movUnitCost.replace(',', '.').trim())
         : currentMeta.cost_price ?? 0
@@ -248,8 +242,9 @@ export function InventoryPage() {
         paymentMethod: movReason === 'sale' ? movPayment : undefined,
         quantity: qty,
         unitPrice: modalProduct.price ?? 0,
-        unitCost: parsedCost,
+        unitCost: parsedCost > 0 ? parsedCost : 0,
         supplier: movSupplier,
+        responsible: movResponsible.trim() || 'Admin Alfa',
         note: movNote,
       })
 
@@ -320,20 +315,22 @@ export function InventoryPage() {
   // Exportar Balanço Financeiro e Inventário Completo em CSV
   const handleExportFinancialCsv = () => {
     const header =
-      'Produto;Categoria;Estoque Atual;Preco Custo (R$);Preco Venda (R$);Margem Unitaria (R$);Margem (%);Capital Investido (R$);Valor Venda Total (R$);Lucro Projetado (R$);Vendas Realizadas (Un);Cliques WhatsApp\n'
+      'Produto;SKU;Categoria;Estoque Atual;Preco Custo (R$);Preco Venda (R$);Margem Unitaria (R$);Margem (%);Capital Investido (R$);Valor Venda Total (R$);Lucro Projetado (R$);Vendas Realizadas (Un);Cliques WhatsApp\n'
     const rows = products
       .map((p) => {
         const m = metaMap[p.id] || {}
         const stock = m.stock_quantity ?? 0
-        const cost = m.cost_price ?? (p.price ? Math.round(p.price * 0.65) : 0)
+        const hasCost = typeof m.cost_price === 'number' && m.cost_price > 0
+        const cost = hasCost ? m.cost_price! : 0
         const price = p.price ?? 0
-        const unitProfit = price - cost
-        const marginPct = price > 0 ? ((unitProfit / price) * 100).toFixed(1) : '0.0'
+        const unitProfit = hasCost && price > 0 ? price - cost : 0
+        const marginPct =
+          hasCost && price > 0 ? ((unitProfit / price) * 100).toFixed(1) + '%' : 'Sem custo'
         const totalCost = (cost * stock).toFixed(2).replace('.', ',')
         const totalSale = (price * stock).toFixed(2).replace('.', ',')
         const totalProfit = (unitProfit * stock).toFixed(2).replace('.', ',')
 
-        return `${p.name};${p.category?.name || ''};${stock};${cost.toFixed(2).replace('.', ',')};${price.toFixed(2).replace('.', ',')};${unitProfit.toFixed(2).replace('.', ',')};${marginPct}%;${totalCost};${totalSale};${totalProfit};${m.total_units_sold || 0};${m.whatsapp_clicks || 0}`
+        return `${p.name};${m.sku || ''};${p.category?.name || ''};${stock};${hasCost ? cost.toFixed(2).replace('.', ',') : 'Nao informado'};${price.toFixed(2).replace('.', ',')};${hasCost ? unitProfit.toFixed(2).replace('.', ',') : '—'};${marginPct};${totalCost};${totalSale};${totalProfit};${m.total_units_sold || 0};${m.whatsapp_clicks || 0}`
       })
       .join('\n')
 
@@ -356,13 +353,14 @@ export function InventoryPage() {
     )
   }
 
-  // ── Cálculos Financeiros, DRE, Curva ABC e Alertas ───────────────
+  // ── Cálculos Financeiros, DRE, Curva ABC e Alertas (Sem custos fictícios) ───
   let totalUnits = 0
-  let totalCostInvested = 0 // Capital imobilizado a preço de custo
+  let totalCostInvested = 0 // Capital imobilizado real a preço de custo cadastrado
   let totalSalePotential = 0 // Faturamento potencial do estoque atual
+  let totalSalePotentialWithCost = 0
   let lowStockCount = 0
   let zeroStockCount = 0
-  let unsetCount = 0
+  let withoutCostCount = 0
 
   interface SmartAlert {
     id: string
@@ -376,30 +374,33 @@ export function InventoryPage() {
 
   for (const p of products) {
     const meta = metaMap[p.id] || {}
-    const stock = meta.stock_quantity
+    const stock = meta.stock_quantity ?? 0
     const minAlert = meta.low_stock_threshold ?? 2
     const clicks = meta.whatsapp_clicks ?? 0
     const price = p.price ?? 0
-    const cost = meta.cost_price ?? (price > 0 ? Math.round(price * 0.65) : 0)
+    const hasCost = typeof meta.cost_price === 'number' && meta.cost_price > 0
+    const cost = hasCost ? meta.cost_price! : null
 
-    if (stock === undefined || stock === null || meta.cost_price === undefined) {
-      unsetCount++
+    if (!hasCost) {
+      withoutCostCount++
     }
 
-    const effectiveStock = stock ?? 0
-    totalUnits += effectiveStock
-    totalCostInvested += cost * effectiveStock
-    totalSalePotential += price * effectiveStock
+    totalUnits += stock
+    totalSalePotential += price * stock
+    if (cost !== null) {
+      totalCostInvested += cost * stock
+      totalSalePotentialWithCost += price * stock
+    }
 
-    // Alerta de margem comprimida (< 20%)
-    if (price > 0 && cost > 0) {
+    // Alerta de margem comprimida (< 20%) — apenas quando o custo foi cadastrado
+    if (price > 0 && cost !== null) {
       const marginPct = ((price - cost) / price) * 100
       if (marginPct < 20) {
         smartAlerts.push({
           id: `margin-${p.id}`,
           level: 'margin',
           title: `Margem baixa (${marginPct.toFixed(0)}%): ${p.name}`,
-          description: `Custo: ${formatBRL(cost)} · Venda: ${formatBRL(price)}. Considere reajustar o preço.`,
+          description: `Custo real: ${formatBRL(cost)} · Venda: ${formatBRL(price)}. Considere reajustar o preço.`,
           product: p,
         })
       }
@@ -414,10 +415,10 @@ export function InventoryPage() {
         description:
           clicks > 0
             ? `Teve ${clicks} procura(s) no WhatsApp. Reponha para não perder vendas!`
-            : 'Produto pausado automaticamente como Indisponível.',
+            : 'Produto marcado como Indisponível na vitrine.',
         product: p,
       })
-    } else if (stock !== undefined && stock !== null && stock <= minAlert) {
+    } else if (stock <= minAlert) {
       lowStockCount++
       if (clicks >= 2) {
         smartAlerts.push({
@@ -439,9 +440,11 @@ export function InventoryPage() {
     }
   }
 
-  const projectedStockProfit = Math.max(0, totalSalePotential - totalCostInvested)
+  const projectedStockProfit = Math.max(0, totalSalePotentialWithCost - totalCostInvested)
   const avgStockMarginPct =
-    totalSalePotential > 0 ? (projectedStockProfit / totalSalePotential) * 100 : 0
+    totalSalePotentialWithCost > 0
+      ? (projectedStockProfit / totalSalePotentialWithCost) * 100
+      : 0
 
   // Cálculo do DRE a partir das movimentações e despesas registradas
   let grossSalesRevenue = 0
@@ -482,10 +485,10 @@ export function InventoryPage() {
     const m = metaMap[p.id] || {}
     const stock = m.stock_quantity ?? 0
     const price = p.price ?? 0
-    const cost = m.cost_price ?? (price > 0 ? Math.round(price * 0.65) : 0)
+    const cost = typeof m.cost_price === 'number' && m.cost_price > 0 ? m.cost_price : 0
     const sold = m.total_units_sold ?? 0
     const clicks = m.whatsapp_clicks ?? 0
-    const capitalLocked = cost * stock
+    const capitalLocked = cost > 0 ? cost * stock : price * stock
     const score = sold * 10 + clicks * 3
     return {
       product: p,
@@ -512,22 +515,25 @@ export function InventoryPage() {
   )
 
   const filteredProducts = products.filter((p) => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase())
     const meta = metaMap[p.id]
-    const stock = meta?.stock_quantity
+    const matchSearch =
+      !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (meta?.sku && meta.sku.toLowerCase().includes(search.toLowerCase()))
+    const stock = meta?.stock_quantity ?? 0
     const min = meta?.low_stock_threshold ?? 2
+    const hasCost = typeof meta?.cost_price === 'number' && meta.cost_price > 0
 
     if (!matchSearch) return false
     if (stockFilter === 'zero') return stock === 0
-    if (stockFilter === 'critical')
-      return stock !== undefined && stock !== null && stock <= min
-    if (stockFilter === 'unset') return stock === undefined || stock === null
+    if (stockFilter === 'critical') return stock > 0 && stock <= min
+    if (stockFilter === 'unset') return !hasCost
     return true
   })
 
   return (
     <AdminLayout>
-      <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full">
+      <div className="flex flex-col gap-6 w-full max-w-[1600px]">
         {/* Cabeçalho */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -535,19 +541,23 @@ export function InventoryPage() {
               Estoque, Custos & Inteligência Financeira
             </h1>
             <p className="text-sm text-[#767676] mt-0.5">
-              Controle de lotes, margem de lucro, Curva ABC, capital parado e DRE simplificado
+              Controle de lotes, margem bruta real, ajustes de inventário, Curva ABC e histórico auditável.
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {unsetCount > 0 && (
-              <Button
-                variant="secondary"
-                icon={<RefreshCw size={15} />}
-                onClick={handleInitializeDefaults}
+            {withoutCostCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('inventory')
+                  setStockFilter(stockFilter === 'unset' ? 'all' : 'unset')
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-xs font-bold text-[#92400E] hover:border-[#F59E0B] transition-colors"
               >
-                Preencher custos/estoque base
-              </Button>
+                <AlertTriangle size={14} />
+                {withoutCostCount} item(ns) sem custo cadastrado
+              </button>
             )}
             <Button
               variant="secondary"
@@ -801,6 +811,7 @@ export function InventoryPage() {
                 <option value="all">Todos os níveis</option>
                 <option value="critical">Estoque baixo / Crítico</option>
                 <option value="zero">Esgotados (0 un.)</option>
+                <option value="unset">Sem custo cadastrado</option>
               </select>
             </div>
           )}
@@ -823,7 +834,7 @@ export function InventoryPage() {
                       Venda Unit.
                     </th>
                     <th className="px-3 py-3 text-xs font-semibold text-[#767676] hidden md:table-cell">
-                      Lucro / Margem
+                      Lucro / Margem Real
                     </th>
                     <th className="px-3 py-3 text-xs font-semibold text-[#767676]">
                       Saldo Atual
@@ -839,10 +850,14 @@ export function InventoryPage() {
                     const stock = meta.stock_quantity ?? 0
                     const min = meta.low_stock_threshold ?? 2
                     const price = product.price ?? 0
-                    const cost =
-                      meta.cost_price ?? (price > 0 ? Math.round(price * 0.65) : 0)
-                    const unitProfit = price - cost
-                    const marginPct = price > 0 ? (unitProfit / price) * 100 : 0
+                    const hasCost =
+                      typeof meta.cost_price === 'number' && meta.cost_price > 0
+                    const cost = hasCost ? meta.cost_price! : null
+                    const unitProfit = hasCost && price > 0 ? price - cost! : null
+                    const marginPct =
+                      hasCost && price > 0 && unitProfit !== null
+                        ? (unitProfit / price) * 100
+                        : null
 
                     const primaryImg =
                       product.product_images?.find((i) => i.is_primary) ||
@@ -871,11 +886,12 @@ export function InventoryPage() {
                             <div className="min-w-0">
                               <Link
                                 to={`/admin/produtos/${product.id}/editar`}
-                                className="text-sm font-semibold text-[#111111] hover:underline truncate block max-w-[200px]"
+                                className="text-sm font-semibold text-[#111111] hover:underline truncate block max-w-[240px]"
                               >
                                 {product.name}
                               </Link>
                               <span className="text-[11px] text-[#767676]">
+                                {meta.sku ? `SKU: ${meta.sku} · ` : ''}
                                 {meta.supplier
                                   ? `Forn: ${meta.supplier}`
                                   : product.category?.name || 'Sem categoria'}
@@ -898,18 +914,24 @@ export function InventoryPage() {
                                 if (e.key === 'Escape') setEditingCostId(null)
                               }}
                               className="w-24 px-2 py-1 text-xs font-bold border border-[#111111] rounded-lg outline-none"
+                              placeholder="Ex: 120,00"
                             />
                           ) : (
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingCostId(product.id)
-                                setCostDraft(String(cost))
+                                setCostDraft(cost !== null ? String(cost) : '')
                               }}
-                              title="Clique para alterar o preço de custo"
-                              className="text-xs font-semibold text-[#555555] hover:text-[#111111] hover:bg-gray-100 px-2 py-1 -mx-2 rounded-lg transition-colors tabular-nums"
+                              title="Clique para definir ou alterar o preço de custo"
+                              className={cn(
+                                'text-xs font-semibold px-2 py-1 -mx-2 rounded-lg transition-colors tabular-nums',
+                                cost !== null
+                                  ? 'text-[#555555] hover:text-[#111111] hover:bg-gray-100'
+                                  : 'text-[#92400E] bg-[#FFFBEB] hover:bg-[#FEF3C7]'
+                              )}
                             >
-                              {formatBRL(cost)}
+                              {cost !== null ? formatBRL(cost) : '+ Definir custo'}
                             </button>
                           )}
                         </td>
@@ -919,12 +941,18 @@ export function InventoryPage() {
                           {price > 0 ? formatBRL(price) : '—'}
                         </td>
 
-                        {/* Lucro Unitário e Margem % */}
+                        {/* Lucro Unitário e Margem % Real */}
                         <td className="px-3 py-3 hidden md:table-cell">
-                          {price > 0 ? (
+                          {price > 0 && unitProfit !== null && marginPct !== null ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-[#166534] tabular-nums">
-                                +{formatBRL(unitProfit)}
+                              <span
+                                className={cn(
+                                  'text-xs font-bold tabular-nums',
+                                  unitProfit >= 0 ? 'text-[#166534]' : 'text-red-600'
+                                )}
+                              >
+                                {unitProfit >= 0 ? '+' : ''}
+                                {formatBRL(unitProfit)}
                               </span>
                               <span
                                 className={cn(
@@ -938,7 +966,9 @@ export function InventoryPage() {
                               </span>
                             </div>
                           ) : (
-                            <span className="text-xs text-[#999999]">—</span>
+                            <span className="text-[11px] font-medium text-[#999999]">
+                              Sem custo
+                            </span>
                           )}
                         </td>
 
@@ -986,7 +1016,7 @@ export function InventoryPage() {
                                 setMovType('out')
                                 setMovReason('sale')
                                 setMovQty('1')
-                                setMovUnitCost(String(cost))
+                                setMovUnitCost(cost !== null ? String(cost) : '')
                                 setMovSupplier(meta.supplier || '')
                                 setMovNote('')
                               }}
@@ -1290,11 +1320,12 @@ export function InventoryPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="text-left border-b border-gray-100 bg-[#FAFAF8]">
-                      <th className="px-4 py-3 text-xs font-semibold text-[#767676]">Data</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-[#767676]">Data / Hora</th>
                       <th className="px-3 py-3 text-xs font-semibold text-[#767676]">Produto</th>
                       <th className="px-3 py-3 text-xs font-semibold text-[#767676]">Operação</th>
                       <th className="px-3 py-3 text-xs font-semibold text-[#767676]">Qtd / Saldo</th>
                       <th className="px-3 py-3 text-xs font-semibold text-[#767676]">Impacto Financeiro</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-[#767676]">Responsável</th>
                       <th className="px-4 py-3 text-xs font-semibold text-[#767676]">Detalhes</th>
                     </tr>
                   </thead>
@@ -1305,6 +1336,7 @@ export function InventoryPage() {
                           {new Date(mov.created_at).toLocaleString('pt-BR', {
                             day: '2-digit',
                             month: '2-digit',
+                            year: '2-digit',
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
@@ -1340,13 +1372,13 @@ export function InventoryPage() {
                           )}
                           {(!mov.reason || mov.reason === 'adjustment') && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
-                              Ajuste
+                              Ajuste de Inventário
                             </span>
                           )}
                         </td>
                         <td className="px-3 py-3 text-xs text-[#555555] tabular-nums">
                           <strong>
-                            {mov.type === 'in' ? `+${mov.quantity}` : mov.type === 'out' ? `-${mov.quantity}` : mov.quantity}
+                            {mov.type === 'in' ? `+${mov.quantity}` : mov.type === 'out' ? `-${mov.quantity}` : `= ${mov.new_stock}`}
                           </strong>{' '}
                           ({mov.previous_stock} → {mov.new_stock} un.)
                         </td>
@@ -1368,6 +1400,9 @@ export function InventoryPage() {
                             '—'
                           )}
                         </td>
+                        <td className="px-3 py-3 text-xs font-medium text-[#242424]">
+                          {mov.responsible || 'Admin Alfa'}
+                        </td>
                         <td className="px-4 py-3 text-xs text-[#767676]">
                           {mov.supplier ? `[Forn: ${mov.supplier}] ` : ''}
                           {mov.note}
@@ -1382,7 +1417,7 @@ export function InventoryPage() {
         )}
       </div>
 
-      {/* Modal Completo de Movimentação (Venda, Entrada de Nota/Fornecedor, Garantia, Perda, Brinde) */}
+      {/* Modal Completo de Movimentação (Venda, Entrada de Nota/Fornecedor, Ajuste Manual, Garantia, Perda, Brinde) */}
       {modalProduct && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4">
@@ -1397,7 +1432,7 @@ export function InventoryPage() {
             </div>
 
             {/* Seleção do Tipo de Operação */}
-            <div className="grid grid-cols-3 gap-2 p-1 bg-[#F4F4F4] rounded-xl text-xs font-semibold">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F4F4F4] rounded-xl text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => {
@@ -1426,7 +1461,23 @@ export function InventoryPage() {
                     : 'text-[#767676] hover:text-[#111111]'
                 )}
               >
-                Entrada / Compra
+                Entrada / Lote
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMovType('adjustment')
+                  setMovReason('adjustment')
+                  setMovQty(String(metaMap[modalProduct.id]?.stock_quantity ?? 0))
+                }}
+                className={cn(
+                  'py-2 rounded-lg transition-colors',
+                  movType === 'adjustment'
+                    ? 'bg-white text-[#111111] shadow-2xs'
+                    : 'text-[#767676] hover:text-[#111111]'
+                )}
+              >
+                Ajuste Saldo
               </button>
               <button
                 type="button"
@@ -1471,6 +1522,7 @@ export function InventoryPage() {
                   <input
                     type="number"
                     min="1"
+                    max={metaMap[modalProduct.id]?.stock_quantity ?? 0}
                     value={movQty}
                     onChange={(e) => setMovQty(e.target.value)}
                     className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-[#111111] outline-none"
@@ -1520,6 +1572,24 @@ export function InventoryPage() {
               </div>
             )}
 
+            {movType === 'adjustment' && (
+              <div>
+                <label className="text-xs font-semibold text-[#111111] block mb-1">
+                  Novo Saldo Físico em Estoque (Contagem de Inventário)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={movQty}
+                  onChange={(e) => setMovQty(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-[#111111] outline-none"
+                />
+                <p className="text-[11px] text-[#767676] mt-1">
+                  O estoque será ajustado de {metaMap[modalProduct.id]?.stock_quantity ?? 0} un. para {movQty || 0} un.
+                </p>
+              </div>
+            )}
+
             {movType === 'out' && movReason !== 'sale' && (
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
@@ -1545,6 +1615,7 @@ export function InventoryPage() {
                   <input
                     type="number"
                     min="1"
+                    max={metaMap[modalProduct.id]?.stock_quantity ?? 0}
                     value={movQty}
                     onChange={(e) => setMovQty(e.target.value)}
                     className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-[#111111] outline-none"
@@ -1553,17 +1624,31 @@ export function InventoryPage() {
               </div>
             )}
 
-            <div>
-              <label className="text-xs font-semibold text-[#111111] block mb-1">
-                Observação (Opcional)
-              </label>
-              <input
-                type="text"
-                value={movNote}
-                onChange={(e) => setMovNote(e.target.value)}
-                placeholder="Ex: Cliente João WhatsApp / Nota Fiscal #402"
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs text-[#111111] outline-none"
-              />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-[#111111] block mb-1">
+                  Responsável pela Operação
+                </label>
+                <input
+                  type="text"
+                  value={movResponsible}
+                  onChange={(e) => setMovResponsible(e.target.value)}
+                  placeholder="Ex: Admin Alfa / Vendedor"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs text-[#111111] outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#111111] block mb-1">
+                  Observação (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={movNote}
+                  onChange={(e) => setMovNote(e.target.value)}
+                  placeholder="Ex: Cliente João / NF #402"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs text-[#111111] outline-none"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 mt-2">

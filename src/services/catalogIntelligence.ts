@@ -16,12 +16,15 @@ const LOCAL_EXTRA_INCOMES_KEY = 'alfa_extra_incomes_v1'
 const LOCAL_SETTINGS_KEY = 'alfa_extended_settings_v1'
 
 export interface ProductMetaItem {
+  sku?: string // Código ou SKU interno do produto
   stock_quantity?: number | null
   low_stock_threshold?: number
-  cost_price?: number | null // Preço de custo (visível apenas no Admin)
+  cost_price?: number | null // Preço de custo real (visível apenas no Admin)
   compare_at_price?: number | null // Preço antigo "De R$" para promoção
   supplier?: string // Fornecedor principal
   variations?: string[] // Ex: ["Preto", "Titânio Natural", "256GB"]
+  views?: number // Visualizações reais da página do produto
+  last_viewed_at?: string
   whatsapp_clicks?: number
   last_clicked_at?: string
   last_sale_at?: string
@@ -59,6 +62,7 @@ export interface StockMovement {
   total_value?: number // Valor total da operação (R$)
   profit_value?: number // Lucro líquido na venda (R$)
   supplier?: string
+  responsible?: string // Operador responsável pela movimentação
   note: string
   created_at: string
 }
@@ -249,7 +253,25 @@ export async function updateProductMeta(
   return updated
 }
 
-// Registra um clique no botão do WhatsApp de um produto
+// Registra visualização real da página de detalhes de um produto (com proteção contra repetição na mesma sessão)
+const viewedSessionSet = new Set<string>()
+export async function recordProductView(productId: string): Promise<void> {
+  if (!productId || viewedSessionSet.has(productId)) return
+  viewedSessionSet.add(productId)
+  try {
+    const all = await getAllProductMeta()
+    const current = all[productId] || {}
+    const nextViews = (current.views || 0) + 1
+    await updateProductMeta(productId, {
+      views: nextViews,
+      last_viewed_at: new Date().toISOString(),
+    })
+  } catch {
+    // Não bloqueia a visualização do cliente
+  }
+}
+
+// Registra um clique no botão do WhatsApp de um produto (apenas métrica de interesse, NUNCA uma venda concluída)
 export async function recordWhatsAppClick(productId: string): Promise<void> {
   try {
     const all = await getAllProductMeta()
@@ -325,6 +347,7 @@ export async function registerStockMovement(params: {
   unitPrice?: number
   unitCost?: number
   supplier?: string
+  responsible?: string
   note?: string
 }): Promise<{ newStock: number; movement: StockMovement; marginWarning?: string }> {
   const allMeta = await getAllProductMeta()
@@ -360,7 +383,8 @@ export async function registerStockMovement(params: {
 
   if (effectiveReason === 'sale') {
     totalValue = unitPrice * qty
-    profitValue = (unitPrice - unitCost) * qty
+    // Só calcula lucro positivo/negativo se houver custo real informado; caso contrário, registra 0 para não distorcer com estimativas
+    profitValue = unitCost > 0 ? (unitPrice - unitCost) * qty : 0
   } else if (effectiveReason === 'restock') {
     totalValue = unitCost * qty
   } else if (effectiveReason === 'warranty' || effectiveReason === 'loss' || effectiveReason === 'gift') {
@@ -436,6 +460,7 @@ export async function registerStockMovement(params: {
     total_value: totalValue,
     profit_value: profitValue,
     supplier: params.supplier,
+    responsible: params.responsible?.trim() || 'Operador Admin',
     note: params.note?.trim() || reasonLabels[effectiveReason],
     created_at: new Date().toISOString(),
   }
